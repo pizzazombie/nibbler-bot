@@ -24,8 +24,10 @@ services:
       WEEKLY_SUMMARY_MINUTE: ${WEEKLY_SUMMARY_MINUTE:-0}
       MONTHLY_SUMMARY_HOUR: ${MONTHLY_SUMMARY_HOUR:-9}
       MONTHLY_SUMMARY_MINUTE: ${MONTHLY_SUMMARY_MINUTE:-5}
+      ADMIN_CHAT_IDS: ${ADMIN_CHAT_IDS:-}
     volumes:
       - nibbler_bot_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes:
   nibbler_bot_data:

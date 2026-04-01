@@ -25,6 +25,7 @@ Only confirmed meals count.
 - sends a monthly trend summary on the first day of the next month
 - tracks OpenAI usage cost, generation counts, and user activity in SQLite for future admin stats
 - limits each user to `100` generations per day by default
+- supports admin-only monitoring commands for the owner
 
 ## Stack
 
@@ -131,6 +132,17 @@ health
 - `WEEKLY_SUMMARY_MINUTE`
 - `MONTHLY_SUMMARY_HOUR`
 - `MONTHLY_SUMMARY_MINUTE`
+- `ADMIN_CHAT_IDS`
+
+## Admin Monitoring
+
+If `ADMIN_CHAT_IDS` contains your Telegram private `chat_id`, only that chat gets the extra bot commands:
+
+- `/health`
+- `/server`
+- `/containers`
+
+These commands are scoped to the admin chat and are not shown to regular users.
 
 ## Deploy
 

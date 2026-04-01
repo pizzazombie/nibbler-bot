@@ -5,7 +5,9 @@ import logging
 from datetime import date, datetime, time, timedelta
 from html import escape
 
-from telegram import BotCommand, InputFile, Update
+from pathlib import Path
+
+from telegram import BotCommand, BotCommandScopeChat, InputFile, Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import (
@@ -34,6 +36,7 @@ from .formatting import (
     format_weekly_summary_message,
 )
 from .meal_analyzer import MealAnalyzer
+from .monitoring import MonitoringService
 from .models import MealEntry, PendingAnalysis, UserProfile
 from .storage import Storage
 
@@ -50,6 +53,14 @@ def build_bot_commands() -> list[BotCommand]:
         BotCommand("help", "Show instructions"),
         BotCommand("today", "Show today's calories"),
         BotCommand("settings", "Open settings"),
+    ]
+
+
+def build_admin_bot_commands() -> list[BotCommand]:
+    return build_bot_commands() + [
+        BotCommand("health", "Admin: service health"),
+        BotCommand("server", "Admin: server resources"),
+        BotCommand("containers", "Admin: Docker containers"),
     ]
 
 
@@ -96,6 +107,7 @@ def register_handlers(
     settings: Settings,
     storage: Storage,
     analyzer: MealAnalyzer,
+    monitoring: MonitoringService,
 ) -> None:
     seen_media_groups: dict[str, datetime] = {}
 
@@ -197,6 +209,21 @@ def register_handlers(
                 await send_welcome_or_password_prompt(update.effective_message, user)
             return None
         return user
+
+    def is_admin(chat_id: int) -> bool:
+        return chat_id in settings.admin_chat_ids
+
+    async def ensure_admin(update: Update) -> UserProfile | None:
+        user = await ensure_ready_user(update)
+        if user is None:
+            return None
+        if is_admin(user.chat_id):
+            return user
+        if update.effective_message is not None:
+            await update.effective_message.reply_text("This command is available only to the admin.")
+        elif update.callback_query is not None:
+            await update.callback_query.answer("Admin only.", show_alert=True)
+        return None
 
     async def edit_or_send_pending_message(
         *,
@@ -558,6 +585,54 @@ def register_handlers(
             return
         await open_settings(update.effective_message, user)
 
+    async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        user = await ensure_admin(update)
+        if user is None or update.effective_message is None:
+            return
+        db_path = Path(settings.database_path)
+        users_count = await storage.count_users()
+        pending_count = await storage.count_pending_analyses()
+        db_size = db_path.stat().st_size if db_path.exists() else 0
+        await update.effective_message.reply_text(
+            (
+                "🩺 <b>Nibbler health</b>\n\n"
+                f"<b>Status:</b> ok\n"
+                f"<b>Bot uptime:</b> {monitoring.app_uptime()}\n"
+                f"<b>Model:</b> {escape(settings.openai_model)}\n"
+                f"<b>Users:</b> {users_count}\n"
+                f"<b>Pending analyses:</b> {pending_count}\n"
+                f"<b>DB size:</b> {round(db_size / 1024, 1)} KB"
+            ),
+            parse_mode=ParseMode.HTML,
+            reply_markup=build_main_keyboard(),
+        )
+
+    async def server_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        user = await ensure_admin(update)
+        if user is None or update.effective_message is None:
+            return
+        await update.effective_message.reply_text(
+            monitoring.server_snapshot(),
+            parse_mode=ParseMode.HTML,
+            reply_markup=build_main_keyboard(),
+        )
+
+    async def containers_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        user = await ensure_admin(update)
+        if user is None or update.effective_message is None:
+            return
+        try:
+            snapshots = await monitoring.list_containers()
+            text = monitoring.format_containers(snapshots)
+        except Exception:
+            LOGGER.exception("Failed to load Docker container stats for admin chat %s", user.chat_id)
+            text = "I couldn't read Docker container stats right now."
+        await update.effective_message.reply_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=build_main_keyboard(),
+        )
+
     async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await ensure_private_chat(update):
             return
@@ -897,6 +972,11 @@ def register_handlers(
     async def post_init(app: Application) -> None:
         await storage.initialize()
         await app.bot.set_my_commands(build_bot_commands())
+        for chat_id in settings.admin_chat_ids:
+            await app.bot.set_my_commands(
+                build_admin_bot_commands(),
+                scope=BotCommandScopeChat(chat_id=chat_id),
+            )
         app.job_queue.run_daily(
             send_weekly_summaries,
             time=time(
@@ -921,6 +1001,9 @@ def register_handlers(
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("today", today_command))
     application.add_handler(CommandHandler("settings", settings_command))
+    application.add_handler(CommandHandler("health", health_command))
+    application.add_handler(CommandHandler("server", server_command))
+    application.add_handler(CommandHandler("containers", containers_command))
     application.add_handler(CallbackQueryHandler(on_callback))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

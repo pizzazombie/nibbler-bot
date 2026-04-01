@@ -503,6 +503,18 @@ class Storage:
             for row in rows
         ]
 
+    async def count_users(self) -> int:
+        async with aiosqlite.connect(self._database_path) as db:
+            cursor = await db.execute("SELECT COUNT(*) FROM users")
+            row = await cursor.fetchone()
+        return int(row[0] or 0)
+
+    async def count_pending_analyses(self) -> int:
+        async with aiosqlite.connect(self._database_path) as db:
+            cursor = await db.execute("SELECT COUNT(*) FROM pending_analyses")
+            row = await cursor.fetchone()
+        return int(row[0] or 0)
+
     async def get_daily_calories_between(
         self,
         *,

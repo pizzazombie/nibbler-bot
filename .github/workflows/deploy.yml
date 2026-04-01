@@ -55,6 +55,7 @@ jobs:
           WEEKLY_SUMMARY_MINUTE=${{ vars.WEEKLY_SUMMARY_MINUTE || '0' }}
           MONTHLY_SUMMARY_HOUR=${{ vars.MONTHLY_SUMMARY_HOUR || '9' }}
           MONTHLY_SUMMARY_MINUTE=${{ vars.MONTHLY_SUMMARY_MINUTE || '5' }}
+          ADMIN_CHAT_IDS=${{ vars.ADMIN_CHAT_IDS }}
           ENVVARS
           docker compose --env-file .env.production up -d --build
           docker image prune -f

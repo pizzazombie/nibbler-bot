@@ -31,6 +31,18 @@ def _optional_float(name: str) -> float | None:
     return float(value)
 
 
+def _optional_int_set(name: str) -> frozenset[int]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return frozenset()
+    values: list[int] = []
+    for item in raw.split(","):
+        normalized = item.strip()
+        if normalized:
+            values.append(int(normalized))
+    return frozenset(values)
+
+
 @dataclass(frozen=True, slots=True)
 class PricingConfig:
     input_per_1m_usd: float
@@ -70,6 +82,7 @@ class Settings:
     weekly_summary_minute: int
     monthly_summary_hour: int
     monthly_summary_minute: int
+    admin_chat_ids: frozenset[int]
     pricing: PricingConfig
 
     @property
@@ -109,5 +122,6 @@ def load_settings() -> Settings:
         weekly_summary_minute=int(os.getenv("WEEKLY_SUMMARY_MINUTE", "0")),
         monthly_summary_hour=int(os.getenv("MONTHLY_SUMMARY_HOUR", "9")),
         monthly_summary_minute=int(os.getenv("MONTHLY_SUMMARY_MINUTE", "5")),
+        admin_chat_ids=_optional_int_set("ADMIN_CHAT_IDS"),
         pricing=_resolve_pricing(model),
     )
