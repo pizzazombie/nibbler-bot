@@ -659,7 +659,16 @@ def register_handlers(
             return
         data = query.data or ""
         if data == "meal:fix_hint":
-            await query.answer("Send a text correction, for example: It was Coke Zero.", show_alert=True)
+            await query.answer(
+                (
+                    "💬 Send any comment you want and I'll use it in the next estimate.\n\n"
+                    "Examples:\n"
+                    "• there was also a piece of processed cheese on the plate\n"
+                    "• I also drank a glass of orange juice\n"
+                    "• it was Coke Zero 🙂"
+                ),
+                show_alert=True,
+            )
             return
 
         if data == "meal:discard":

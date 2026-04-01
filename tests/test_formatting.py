@@ -4,10 +4,12 @@ from datetime import date
 
 from nibbler_bot.formatting import (
     build_main_keyboard,
+    build_pending_keyboard,
     build_settings_keyboard,
     format_analysis_message,
     format_manual_monthly_chart_message,
 )
+from nibbler_bot.meal_analyzer import load_system_prompt
 from nibbler_bot.models import DailyCalories, MealAnalysis, MealItem, UserProfile
 
 
@@ -37,13 +39,16 @@ def test_pending_analysis_message_mentions_projection() -> None:
 
 def test_keyboards_include_chart_buttons() -> None:
     main_keyboard = build_main_keyboard()
+    pending_keyboard = build_pending_keyboard()
     settings_keyboard = build_settings_keyboard()
 
     main_texts = [button.text for row in main_keyboard.keyboard for button in row]
+    pending_texts = [button.text for row in pending_keyboard.inline_keyboard for button in row]
     settings_texts = [button.text for row in settings_keyboard.inline_keyboard for button in row]
 
     assert "📈 Week" in main_texts
     assert "🗓️ Month" in main_texts
+    assert "💬 Add comment or fix" in pending_texts
     assert "📈 Weekly chart" in settings_texts
     assert "🗓️ Monthly chart" in settings_texts
 
@@ -71,3 +76,10 @@ def test_manual_month_message_mentions_same_span_comparison() -> None:
 
     assert "Month so far" in text
     assert "same span last month" in text
+
+
+def test_system_prompt_is_loaded_from_text_file() -> None:
+    prompt = load_system_prompt()
+
+    assert "piece of processed cheese" in prompt
+    assert "glass of orange juice" in prompt

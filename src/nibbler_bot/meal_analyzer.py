@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
+from importlib import resources
 
 from openai import AsyncOpenAI, NOT_GIVEN
 
@@ -10,20 +11,13 @@ from .config import Settings
 from .models import MealAnalysis, MealItem, OpenAIUsage
 
 
-SYSTEM_PROMPT = """
-You estimate calories from one food or drink photo for a Telegram bot.
-
-Rules:
-- Be practical and concise.
-- Use the photo plus the user's text. If the user provides corrections, trust them over the image.
-- Include off-photo items only if the user explicitly mentions them.
-- Prefer packaged-product calorie estimates when the product is clearly recognizable.
-- For restaurant or home-cooked meals, make realistic portion estimates and mention uncertainty in notes.
-- Return integer calories.
-- Keep item names short and human-readable.
-- If the image is unclear, still provide your best estimate and mention the uncertainty.
-- If there is no edible item at all, return an empty items list, total_calories 0, and explain that in notes.
-""".strip()
+def load_system_prompt() -> str:
+    return (
+        resources.files("nibbler_bot")
+        .joinpath("prompts", "meal_analysis_system_prompt.txt")
+        .read_text(encoding="utf-8")
+        .strip()
+    )
 
 
 RESPONSE_SCHEMA: dict[str, object] = {
@@ -84,7 +78,7 @@ class MealAnalyzer:
         prompt = self._build_user_prompt(caption_text=caption_text, correction_text=correction_text)
         response = await self._client.responses.create(
             model=self._settings.openai_model,
-            instructions=SYSTEM_PROMPT,
+            instructions=load_system_prompt(),
             reasoning=(
                 {"effort": self._settings.openai_reasoning_effort}
                 if self._settings.openai_reasoning_effort

@@ -31,7 +31,7 @@ def build_pending_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton("❌ Ignore", callback_data="meal:discard"),
             ],
             [
-                InlineKeyboardButton("📝 Fix estimate", callback_data="meal:fix_hint"),
+                InlineKeyboardButton("💬 Add comment or fix", callback_data="meal:fix_hint"),
                 InlineKeyboardButton("⚙️ Settings", callback_data="settings:open"),
             ],
         ]
@@ -81,7 +81,8 @@ def format_help_message() -> str:
         "After the estimate arrives, only these actions count:\n"
         "• tap <b>✅ Save meal</b> to add it to today\n"
         "• tap <b>❌ Ignore</b> to discard it\n"
-        "• send a correction message like <i>\"It was Coke Zero\"</i> to re-run the same photo\n\n"
+        "• send a comment like <i>\"It was Coke Zero\"</i> or <i>\"also a glass of orange juice\"</i> "
+        "to re-run the same photo\n\n"
         "Important:\n"
         "• if you send a new photo, the old pending estimate is replaced\n"
         "• if you send several photos as an album, I will ask for one at a time\n"
@@ -160,7 +161,7 @@ def format_analysis_message(
         lines.extend(
             [
                 "",
-                "Send a correction message or use the buttons below.",
+                "💬 Send any comment or correction and I'll include it in the next estimate.",
             ]
         )
     return "\n".join(lines)
