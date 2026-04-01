@@ -49,6 +49,18 @@ def test_storage_flow(tmp_path) -> None:
             output_tokens=40,
             total_cost_usd=0.001,
         )
+        await storage.record_openai_usage(
+            chat_id=1,
+            local_date="2026-03-31",
+            request_kind="meal_analysis",
+            model="gpt-5.4-mini",
+            input_tokens=50,
+            cached_input_tokens=0,
+            output_tokens=20,
+            total_cost_usd=0.002,
+        )
         assert await storage.count_generations_for_day(chat_id=1, local_date="2026-04-01") == 1
+        assert await storage.get_openai_usage_summary() == (2, 0.003)
+        assert await storage.get_openai_usage_summary_for_month("2026-04") == (1, 0.001)
 
     asyncio.run(scenario())

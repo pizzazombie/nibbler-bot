@@ -590,8 +590,13 @@ def register_handlers(
         if user is None or update.effective_message is None:
             return
         db_path = Path(settings.database_path)
+        current_month_key = local_now(settings).strftime("%Y-%m")
         users_count = await storage.count_users()
         pending_count = await storage.count_pending_analyses()
+        total_generations, total_cost = await storage.get_openai_usage_summary()
+        monthly_generations, monthly_cost = await storage.get_openai_usage_summary_for_month(
+            current_month_key
+        )
         db_size = db_path.stat().st_size if db_path.exists() else 0
         await update.effective_message.reply_text(
             (
@@ -601,6 +606,10 @@ def register_handlers(
                 f"<b>Model:</b> {escape(settings.openai_model)}\n"
                 f"<b>Users:</b> {users_count}\n"
                 f"<b>Pending analyses:</b> {pending_count}\n"
+                f"<b>Generations total:</b> {total_generations}\n"
+                f"<b>Generations this month:</b> {monthly_generations}\n"
+                f"<b>Cost total:</b> ${total_cost:.4f}\n"
+                f"<b>Cost this month:</b> ${monthly_cost:.4f}\n"
                 f"<b>DB size:</b> {round(db_size / 1024, 1)} KB"
             ),
             parse_mode=ParseMode.HTML,

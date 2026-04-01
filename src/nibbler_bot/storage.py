@@ -475,6 +475,30 @@ class Storage:
             row = await cursor.fetchone()
         return int(row[0] or 0)
 
+    async def get_openai_usage_summary(self) -> tuple[int, float]:
+        async with aiosqlite.connect(self._database_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT COUNT(*), COALESCE(SUM(total_cost_usd), 0)
+                FROM openai_requests
+                """
+            )
+            row = await cursor.fetchone()
+        return int(row[0] or 0), float(row[1] or 0)
+
+    async def get_openai_usage_summary_for_month(self, month_key: str) -> tuple[int, float]:
+        async with aiosqlite.connect(self._database_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT COUNT(*), COALESCE(SUM(total_cost_usd), 0)
+                FROM openai_requests
+                WHERE local_date LIKE ?
+                """,
+                (f"{month_key}-%",),
+            )
+            row = await cursor.fetchone()
+        return int(row[0] or 0), float(row[1] or 0)
+
     async def list_authorized_users(self) -> list[UserProfile]:
         async with aiosqlite.connect(self._database_path) as db:
             db.row_factory = aiosqlite.Row
