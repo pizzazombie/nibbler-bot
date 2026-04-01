@@ -1,0 +1,61 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${{ vars.VPS_PORT || '22' }}" -H "${{ vars.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Pack release
+        run: tar --exclude=.git --exclude=.venv --exclude=.pytest_cache --exclude=.env.local --exclude=.env.production --exclude=data -czf "$RUNNER_TEMP/release.tgz" .
+
+      - name: Upload release
+        run: |
+          ssh -p "${{ vars.VPS_PORT || '22' }}" "${{ vars.VPS_USER }}@${{ vars.VPS_HOST }}" "mkdir -p ~/apps/nibbler-bot"
+          scp -P "${{ vars.VPS_PORT || '22' }}" "$RUNNER_TEMP/release.tgz" "${{ vars.VPS_USER }}@${{ vars.VPS_HOST }}:~/apps/nibbler-bot/release.tgz"
+
+      - name: Deploy on VPS
+        run: |
+          ssh -p "${{ vars.VPS_PORT || '22' }}" "${{ vars.VPS_USER }}@${{ vars.VPS_HOST }}" <<EOF
+          set -eu
+          cd ~/apps/nibbler-bot
+          tar -xzf release.tgz
+          rm -f release.tgz
+          cat > .env.production <<ENVVARS
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          ACCESS_PASSWORD=${{ secrets.ACCESS_PASSWORD }}
+          TIMEZONE=${{ vars.TIMEZONE || 'Europe/Madrid' }}
+          DATABASE_PATH=/data/nibbler-bot.db
+          DOCKER_NETWORK_MODE=${{ vars.DOCKER_NETWORK_MODE || 'bridge' }}
+          OPENAI_MODEL=${{ vars.OPENAI_MODEL || 'gpt-5.4-mini' }}
+          OPENAI_REASONING_EFFORT=${{ vars.OPENAI_REASONING_EFFORT || 'low' }}
+          OPENAI_MAX_OUTPUT_TOKENS=${{ vars.OPENAI_MAX_OUTPUT_TOKENS || '800' }}
+          OPENAI_REQUEST_TIMEOUT_SECONDS=${{ vars.OPENAI_REQUEST_TIMEOUT_SECONDS || '60' }}
+          OPENAI_PRICE_INPUT_PER_1M_USD=${{ vars.OPENAI_PRICE_INPUT_PER_1M_USD || '0.75' }}
+          OPENAI_PRICE_CACHED_INPUT_PER_1M_USD=${{ vars.OPENAI_PRICE_CACHED_INPUT_PER_1M_USD || '0.08' }}
+          OPENAI_PRICE_OUTPUT_PER_1M_USD=${{ vars.OPENAI_PRICE_OUTPUT_PER_1M_USD || '4.50' }}
+          DEFAULT_DAILY_CALORIE_LIMIT=${{ vars.DEFAULT_DAILY_CALORIE_LIMIT || '1800' }}
+          DAILY_GENERATION_LIMIT=${{ vars.DAILY_GENERATION_LIMIT || '100' }}
+          WEEKLY_SUMMARY_HOUR=${{ vars.WEEKLY_SUMMARY_HOUR || '9' }}
+          WEEKLY_SUMMARY_MINUTE=${{ vars.WEEKLY_SUMMARY_MINUTE || '0' }}
+          MONTHLY_SUMMARY_HOUR=${{ vars.MONTHLY_SUMMARY_HOUR || '9' }}
+          MONTHLY_SUMMARY_MINUTE=${{ vars.MONTHLY_SUMMARY_MINUTE || '5' }}
+          ENVVARS
+          docker compose --env-file .env.production up -d --build
+          docker image prune -f
+          EOF
