@@ -11,6 +11,7 @@ Then it waits politely:
 - send a correction like `It was Coke Zero and one glass of champagne` to re-run the same photo
 
 Only confirmed meals count.
+<img width="823" height="639" alt="image" src="https://github.com/user-attachments/assets/36cb777a-f3e0-40b3-8158-780279457b28" />
 
 ## What It Does
 
