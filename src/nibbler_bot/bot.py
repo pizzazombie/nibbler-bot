@@ -26,6 +26,7 @@ from .formatting import (
     build_settings_keyboard,
     format_analysis_message,
     format_help_message,
+    format_manual_monthly_chart_message,
     format_meal_deleted_message,
     format_monthly_summary_message,
     format_settings_message,
@@ -78,6 +79,10 @@ def previous_month_bounds(anchor: date) -> tuple[date, date]:
 def current_month_bounds(anchor: date) -> tuple[date, date]:
     last_day = calendar.monthrange(anchor.year, anchor.month)[1]
     return date(anchor.year, anchor.month, 1), date(anchor.year, anchor.month, last_day)
+
+
+def month_to_date_bounds(anchor: date) -> tuple[date, date]:
+    return date(anchor.year, anchor.month, 1), anchor
 
 
 def describe_blocked_month(now: datetime) -> str:
@@ -357,6 +362,70 @@ def register_handlers(
             reply_markup=build_main_keyboard(),
         )
 
+    async def send_weekly_chart(message, user: UserProfile) -> None:
+        end_date = local_now(settings).date()
+        start_date = end_date - timedelta(days=6)
+        points = await storage.get_daily_calories_between(
+            chat_id=user.chat_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        chart_bytes = build_weekly_chart(
+            points=points,
+            daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+            title="Nibbler weekly chart",
+            subtitle=f"{start_date.isoformat()} to {end_date.isoformat()}",
+        )
+        await message.reply_photo(
+            photo=InputFile(chart_bytes, filename="weekly-chart.png"),
+            caption=format_weekly_summary_message(
+                user=user,
+                start_date=start_date,
+                end_date=end_date,
+                points=points,
+            ),
+            parse_mode=ParseMode.HTML,
+            reply_markup=build_main_keyboard(),
+        )
+
+    async def send_monthly_chart(message, user: UserProfile) -> None:
+        today = local_now(settings).date()
+        start_date, end_date = month_to_date_bounds(today)
+        previous_month_start, previous_month_end_full = previous_month_bounds(start_date)
+        comparable_days = (end_date - start_date).days
+        previous_end_date = min(
+            previous_month_start + timedelta(days=comparable_days),
+            previous_month_end_full,
+        )
+        points = await storage.get_daily_calories_between(
+            chat_id=user.chat_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        previous_points = await storage.get_daily_calories_between(
+            chat_id=user.chat_id,
+            start_date=previous_month_start,
+            end_date=previous_end_date,
+        )
+        chart_bytes = build_weekly_chart(
+            points=points,
+            daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+            title="Nibbler month-to-date chart",
+            subtitle=f"{start_date.isoformat()} to {end_date.isoformat()}",
+        )
+        await message.reply_photo(
+            photo=InputFile(chart_bytes, filename="monthly-chart.png"),
+            caption=format_manual_monthly_chart_message(
+                user=user,
+                start_date=start_date,
+                end_date=end_date,
+                points=points,
+                previous_points=previous_points,
+            ),
+            parse_mode=ParseMode.HTML,
+            reply_markup=build_main_keyboard(),
+        )
+
     async def handle_password_text(message, user: UserProfile) -> None:
         now = local_now(settings)
         current_month = month_key(now)
@@ -397,7 +466,7 @@ def register_handlers(
 
     async def handle_name_input(message, user: UserProfile) -> None:
         name = (message.text or "").strip()
-        if name in {"⚙️ Settings", "📊 Today"}:
+        if name in {"⚙️ Settings", "📊 Today", "📈 Week", "🗓️ Month"}:
             await message.reply_text("Please send the name you want me to use.")
             return
         if not name:
@@ -424,7 +493,7 @@ def register_handlers(
 
     async def handle_limit_input(message, user: UserProfile) -> None:
         raw = (message.text or "").strip()
-        if raw in {"⚙️ Settings", "📊 Today"}:
+        if raw in {"⚙️ Settings", "📊 Today", "📈 Week", "🗓️ Month"}:
             await message.reply_text("Please send a whole number like 1800.")
             return
         try:
@@ -512,6 +581,16 @@ def register_handlers(
             refreshed = await storage.get_user(user.chat_id)
             if refreshed is not None and refreshed.is_ready:
                 await show_today(message, refreshed)
+            return
+        if text == "📈 Week":
+            refreshed = await storage.get_user(user.chat_id)
+            if refreshed is not None and refreshed.is_ready:
+                await send_weekly_chart(message, refreshed)
+            return
+        if text == "🗓️ Month":
+            refreshed = await storage.get_user(user.chat_id)
+            if refreshed is not None and refreshed.is_ready:
+                await send_monthly_chart(message, refreshed)
             return
         if not user.is_ready:
             await send_welcome_or_password_prompt(message, user)
@@ -666,6 +745,16 @@ def register_handlers(
                 text=format_today_message(user, today_total, meals),
                 parse_mode=ParseMode.HTML,
             )
+            return
+
+        if data == "settings:week":
+            await query.answer()
+            await send_weekly_chart(query.message, user)
+            return
+
+        if data == "settings:month":
+            await query.answer()
+            await send_monthly_chart(query.message, user)
             return
 
         if data == "settings:delete":

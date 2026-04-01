@@ -15,7 +15,10 @@ from .models import DailyCalories, MealAnalysis, MealEntry, UserProfile
 
 def build_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [[KeyboardButton("⚙️ Settings"), KeyboardButton("📊 Today")]],
+        [
+            [KeyboardButton("⚙️ Settings"), KeyboardButton("📊 Today")],
+            [KeyboardButton("📈 Week"), KeyboardButton("🗓️ Month")],
+        ],
         resize_keyboard=True,
     )
 
@@ -42,6 +45,8 @@ def build_settings_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("🎯 Change daily limit", callback_data="settings:limit")],
             [InlineKeyboardButton("🗑️ Delete a meal from today", callback_data="settings:delete")],
             [InlineKeyboardButton("📊 Show today", callback_data="settings:today")],
+            [InlineKeyboardButton("📈 Weekly chart", callback_data="settings:week")],
+            [InlineKeyboardButton("🗓️ Monthly chart", callback_data="settings:month")],
             [InlineKeyboardButton("✖️ Close", callback_data="settings:close")],
         ]
     )
@@ -82,7 +87,8 @@ def format_help_message() -> str:
         "• if you send several photos as an album, I will ask for one at a time\n"
         "• only saved meals affect your daily total\n\n"
         "Use <b>⚙️ Settings</b> to change your name, change your daily calorie goal, or delete a meal "
-        "that was saved by mistake.\n\n"
+        "that was saved by mistake.\n"
+        "Use <b>📈 Week</b> or <b>🗓️ Month</b> to pull your charts on demand.\n\n"
         "Friendly note: all estimates are approximate. Packaged products are usually more accurate than "
         "mixed plates."
     )
@@ -214,4 +220,29 @@ def format_monthly_summary_message(
         f"Average per day: <b>{average} kcal</b>\n"
         f"Days over limit: <b>{over_limit_days}</b>\n"
         f"Trend vs previous month: <b>{trend}</b> ({delta:+d} kcal)"
+    )
+
+
+def format_manual_monthly_chart_message(
+    *,
+    user: UserProfile,
+    start_date: date,
+    end_date: date,
+    points: list[DailyCalories],
+    previous_points: list[DailyCalories],
+) -> str:
+    total = sum(point.calories for point in points)
+    previous_total = sum(point.calories for point in previous_points)
+    average = round(total / max(len(points), 1))
+    delta = total - previous_total
+    limit = user.daily_calorie_limit or 0
+    over_limit_days = sum(1 for point in points if point.calories > limit)
+    trend = "up" if delta > 0 else "down" if delta < 0 else "flat"
+    return (
+        "🗓️ <b>Month so far</b>\n\n"
+        f"{start_date.isoformat()} to {end_date.isoformat()}\n"
+        f"Total: <b>{total} kcal</b>\n"
+        f"Average per day: <b>{average} kcal</b>\n"
+        f"Days over limit: <b>{over_limit_days}</b>\n"
+        f"Trend vs same span last month: <b>{trend}</b> ({delta:+d} kcal)"
     )
