@@ -358,7 +358,11 @@ def register_handlers(
     async def send_shipped_sticker(message) -> None:
         await message.reply_sticker(SHIPPED_STICKER_FILE_ID)
         await message.reply_text(
-            "🚀 Nibbler shipped. Send one meal photo and I'll estimate it.",
+            (
+                "🚀 Nibbler shipped.\n\n"
+                "Try sending me a photo of any food or drink and I'll estimate it.\n"
+                "If I miss something, just send a comment and I'll update the estimate 🙂"
+            ),
             reply_markup=build_main_keyboard(),
         )
 
@@ -510,7 +514,8 @@ def register_handlers(
             await message.reply_text(
                 (
                     f"🎯 Daily goal saved: <b>{limit} kcal</b>\n\n"
-                    "Setup complete."
+                    "You're all set.\n"
+                    "Send me a photo of what you ate or drank and I'll check it."
                 ),
                 parse_mode=ParseMode.HTML,
                 reply_markup=build_main_keyboard(),
