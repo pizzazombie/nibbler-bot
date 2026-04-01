@@ -28,7 +28,7 @@ Only confirmed meals count.
 
 ## Stack
 
-- Python 3.13
+- Python 3.11+
 - `python-telegram-bot`
 - OpenAI Responses API
 - SQLite via `aiosqlite`
@@ -80,6 +80,12 @@ Create `.env.local` from `.env.example`, export the variables, then run:
 
 ```bash
 python -m nibbler_bot
+```
+
+For Docker smoke tests:
+
+```bash
+docker compose --env-file .env.local up --build
 ```
 
 ## Tests
