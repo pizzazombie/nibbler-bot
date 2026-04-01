@@ -38,6 +38,9 @@ from .storage import Storage
 
 
 LOGGER = logging.getLogger(__name__)
+SHIPPED_STICKER_FILE_ID = (
+    "AAMCAQADGQEAAxlpzVyOyaTF7lJazf6ZWCnQDt8wRAACrQEAAhfVwUaXJFDkHgUoqQEAB20AAzoE"
+)
 
 
 def build_bot_commands() -> list[BotCommand]:
@@ -347,6 +350,13 @@ def register_handlers(
             reply_markup=build_main_keyboard(),
         )
 
+    async def send_shipped_sticker(message) -> None:
+        await message.reply_sticker(SHIPPED_STICKER_FILE_ID)
+        await message.reply_text(
+            "🚀 Nibbler shipped. Send one meal photo and I'll estimate it.",
+            reply_markup=build_main_keyboard(),
+        )
+
     async def handle_password_text(message, user: UserProfile) -> None:
         now = local_now(settings)
         current_month = month_key(now)
@@ -431,11 +441,12 @@ def register_handlers(
             await message.reply_text(
                 (
                     f"🎯 Daily goal saved: <b>{limit} kcal</b>\n\n"
-                    "Now send one meal photo and I’ll estimate it."
+                    "Setup complete."
                 ),
                 parse_mode=ParseMode.HTML,
                 reply_markup=build_main_keyboard(),
             )
+            await send_shipped_sticker(message)
             return
         await message.reply_text(
             f"🎯 Daily limit updated to <b>{limit} kcal</b>.",
