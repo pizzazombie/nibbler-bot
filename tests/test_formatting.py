@@ -8,6 +8,7 @@ from nibbler_bot.formatting import (
     build_settings_keyboard,
     format_analysis_message,
     format_manual_monthly_chart_message,
+    format_post_password_welcome_message,
 )
 from nibbler_bot.meal_analyzer import load_system_prompt
 from nibbler_bot.models import DailyCalories, MealAnalysis, MealItem, UserProfile
@@ -83,3 +84,11 @@ def test_system_prompt_is_loaded_from_text_file() -> None:
 
     assert "piece of processed cheese" in prompt
     assert "glass of orange juice" in prompt
+
+
+def test_post_password_welcome_message_explains_bot_capabilities() -> None:
+    text = format_post_password_welcome_message()
+
+    assert "Welcome to Nibbler bot" in text
+    assert "estimate calories from one meal photo at a time" in text
+    assert "First, what should I call you?" in text

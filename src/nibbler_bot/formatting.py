@@ -95,6 +95,19 @@ def format_help_message() -> str:
     )
 
 
+def format_post_password_welcome_message() -> str:
+    return (
+        "👋 <b>Welcome to Nibbler bot</b>\n\n"
+        "I help you track calories from food and drink photos, plus short text notes.\n\n"
+        "Here is what I can do:\n"
+        "• estimate calories from one meal photo at a time\n"
+        "• include extra details like <i>\"also a glass of orange juice\"</i>\n"
+        "• let you save, ignore, or correct each estimate before it counts\n"
+        "• keep your daily total and show weekly or monthly charts\n\n"
+        "First, what should I call you?"
+    )
+
+
 def format_settings_message(user: UserProfile, today_total: int) -> str:
     name = html.escape(user.display_name or user.first_name or "there")
     limit = user.daily_calorie_limit or 0

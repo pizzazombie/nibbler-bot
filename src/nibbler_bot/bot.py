@@ -31,6 +31,7 @@ from .formatting import (
     format_manual_monthly_chart_message,
     format_meal_deleted_message,
     format_monthly_summary_message,
+    format_post_password_welcome_message,
     format_settings_message,
     format_today_message,
     format_weekly_summary_message,
@@ -42,6 +43,9 @@ from .storage import Storage
 
 
 LOGGER = logging.getLogger(__name__)
+INTRO_STICKER_FILE_ID = (
+    "AAMCAgADGQEAAxppzkVlVj8jQfI1RuixLRkt5xyHJAAC15kAAk4vcEqLAWw2HmKH1QEAB20AAzoE"
+)
 SHIPPED_STICKER_FILE_ID = (
     "AAMCAQADGQEAAxlpzVyOyaTF7lJazf6ZWCnQDt8wRAACrQEAAhfVwUaXJFDkHgUoqQEAB20AAzoE"
 )
@@ -393,6 +397,14 @@ def register_handlers(
             reply_markup=build_main_keyboard(),
         )
 
+    async def send_post_password_welcome(message) -> None:
+        await message.reply_sticker(INTRO_STICKER_FILE_ID)
+        await message.reply_text(
+            format_post_password_welcome_message(),
+            parse_mode=ParseMode.HTML,
+            reply_markup=build_main_keyboard(),
+        )
+
     async def send_weekly_chart(message, user: UserProfile) -> None:
         end_date = local_now(settings).date()
         start_date = end_date - timedelta(days=6)
@@ -473,10 +485,7 @@ def register_handlers(
                 default_daily_calorie_limit=settings.default_daily_calorie_limit,
             )
             await storage.set_onboarding_state(user.chat_id, "awaiting_name")
-            await message.reply_text(
-                "✅ Access granted.\n\nWhat should I call you?",
-                reply_markup=build_main_keyboard(),
-            )
+            await send_post_password_welcome(message)
             return
         attempts += 1
         await storage.update_password_attempts(
