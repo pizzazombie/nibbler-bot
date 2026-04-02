@@ -64,3 +64,59 @@ def test_storage_flow(tmp_path) -> None:
         assert await storage.get_openai_usage_summary_for_month("2026-04") == (1, 0.001)
 
     asyncio.run(scenario())
+
+
+def test_delete_user_data_removes_all_user_records(tmp_path) -> None:
+    async def scenario() -> None:
+        storage = Storage(str(tmp_path / "nibbler.db"))
+        await storage.initialize()
+        await storage.upsert_user_identity(chat_id=1, username="nibbler", first_name="Nib")
+        await storage.set_authorized(chat_id=1, month_key="2026-04", default_daily_calorie_limit=1800)
+        await storage.update_display_name(1, "Lev")
+        await storage.update_daily_limit(1, 1900)
+
+        analysis = MealAnalysis(
+            items=[MealItem(name="Coke Zero", amount="330 ml can", calories=3)],
+            total_calories=3,
+            notes=["Recognized as a zero-sugar soda"],
+            confidence="high",
+        )
+        await storage.save_pending_analysis(
+            chat_id=1,
+            telegram_file_id="file-1",
+            telegram_file_unique_id="uniq-1",
+            caption_text="Lunch",
+            correction_text="",
+            analysis=analysis,
+        )
+        await storage.record_openai_usage(
+            chat_id=1,
+            local_date="2026-04-01",
+            request_kind="meal_analysis",
+            model="gpt-5.4-mini",
+            input_tokens=100,
+            cached_input_tokens=10,
+            output_tokens=40,
+            total_cost_usd=0.001,
+        )
+        await storage.mark_report_delivery(
+            chat_id=1,
+            report_kind="weekly",
+            report_period="2026-03-25_2026-03-31",
+        )
+        meal = await storage.confirm_pending_analysis(chat_id=1, local_date="2026-04-01")
+        assert meal is not None
+
+        assert await storage.delete_user_data(1) is True
+        assert await storage.get_user(1) is None
+        assert await storage.get_pending_analysis(1) is None
+        assert await storage.list_meals_for_day(chat_id=1, local_date="2026-04-01") == []
+        assert await storage.count_generations_for_day(chat_id=1, local_date="2026-04-01") == 0
+        assert await storage.has_report_delivery(
+            chat_id=1,
+            report_kind="weekly",
+            report_period="2026-03-25_2026-03-31",
+        ) is False
+        assert await storage.delete_user_data(1) is False
+
+    asyncio.run(scenario())

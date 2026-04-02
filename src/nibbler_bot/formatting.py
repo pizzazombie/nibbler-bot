@@ -44,10 +44,20 @@ def build_settings_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("✏️ Change name", callback_data="settings:name")],
             [InlineKeyboardButton("🎯 Change daily limit", callback_data="settings:limit")],
             [InlineKeyboardButton("🗑️ Delete a meal from today", callback_data="settings:delete")],
+            [InlineKeyboardButton("🧨 Delete all my data", callback_data="settings:wipe")],
             [InlineKeyboardButton("📊 Show today", callback_data="settings:today")],
             [InlineKeyboardButton("📈 Weekly chart", callback_data="settings:week")],
             [InlineKeyboardButton("🗓️ Monthly chart", callback_data="settings:month")],
             [InlineKeyboardButton("✖️ Close", callback_data="settings:close")],
+        ]
+    )
+
+
+def build_delete_all_data_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🧨 Yes, delete everything", callback_data="settings:wipe:confirm")],
+            [InlineKeyboardButton("⬅️ Back", callback_data="settings:open")],
         ]
     )
 
@@ -116,6 +126,15 @@ def format_settings_message(user: UserProfile, today_total: int) -> str:
         f"<b>Name:</b> {name}\n"
         f"<b>Daily limit:</b> {limit} kcal\n"
         f"<b>Saved today:</b> {today_total} / {limit} kcal"
+    )
+
+
+def format_delete_all_data_confirmation_message() -> str:
+    return (
+        "🧨 <b>Delete all data?</b>\n\n"
+        "This will permanently delete your profile, saved meals, pending estimate, calorie history, "
+        "and your personal usage stats.\n\n"
+        "After that, you will need to start again from <b>/start</b>."
     )
 
 

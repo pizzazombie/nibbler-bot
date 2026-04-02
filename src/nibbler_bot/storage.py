@@ -407,6 +407,20 @@ class Storage:
             created_at=row["created_at"],
         )
 
+    async def delete_user_data(self, chat_id: int) -> bool:
+        async with aiosqlite.connect(self._database_path) as db:
+            cursor = await db.execute("SELECT 1 FROM users WHERE chat_id = ?", (chat_id,))
+            exists = await cursor.fetchone()
+            if exists is None:
+                return False
+            await db.execute("DELETE FROM pending_analyses WHERE chat_id = ?", (chat_id,))
+            await db.execute("DELETE FROM meal_entries WHERE chat_id = ?", (chat_id,))
+            await db.execute("DELETE FROM openai_requests WHERE chat_id = ?", (chat_id,))
+            await db.execute("DELETE FROM report_deliveries WHERE chat_id = ?", (chat_id,))
+            await db.execute("DELETE FROM users WHERE chat_id = ?", (chat_id,))
+            await db.commit()
+        return True
+
     async def get_daily_total(self, *, chat_id: int, local_date: str) -> int:
         async with aiosqlite.connect(self._database_path) as db:
             cursor = await db.execute(

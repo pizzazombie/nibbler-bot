@@ -22,10 +22,12 @@ from telegram.ext import (
 from .charts import build_weekly_chart
 from .config import Settings
 from .formatting import (
+    build_delete_all_data_keyboard,
     build_delete_meal_keyboard,
     build_main_keyboard,
     build_pending_keyboard,
     build_settings_keyboard,
+    format_delete_all_data_confirmation_message,
     format_analysis_message,
     format_help_message,
     format_manual_monthly_chart_message,
@@ -876,6 +878,33 @@ def register_handlers(
             await query.edit_message_text(
                 text="Choose a saved meal to delete:",
                 reply_markup=build_delete_meal_keyboard(meals),
+            )
+            return
+
+        if data == "settings:wipe":
+            await query.answer()
+            await query.edit_message_text(
+                text=format_delete_all_data_confirmation_message(),
+                parse_mode=ParseMode.HTML,
+                reply_markup=build_delete_all_data_keyboard(),
+            )
+            return
+
+        if data == "settings:wipe:confirm":
+            await query.answer()
+            deleted = await storage.delete_user_data(user.chat_id)
+            if not deleted:
+                await query.edit_message_text(
+                    text="Your data is already gone. Send /start if you want to begin again.",
+                )
+                return
+            await query.edit_message_text(
+                text=(
+                    "🧹 <b>All your Nibbler data was deleted.</b>\n\n"
+                    "Your profile, saved meals, pending estimate, and personal usage history are gone.\n"
+                    "Send <b>/start</b> if you want to begin again."
+                ),
+                parse_mode=ParseMode.HTML,
             )
             return
 

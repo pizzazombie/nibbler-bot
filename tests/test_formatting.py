@@ -3,9 +3,11 @@ from __future__ import annotations
 from datetime import date
 
 from nibbler_bot.formatting import (
+    build_delete_all_data_keyboard,
     build_main_keyboard,
     build_pending_keyboard,
     build_settings_keyboard,
+    format_delete_all_data_confirmation_message,
     format_analysis_message,
     format_manual_monthly_chart_message,
     format_post_password_welcome_message,
@@ -42,16 +44,22 @@ def test_keyboards_include_chart_buttons() -> None:
     main_keyboard = build_main_keyboard()
     pending_keyboard = build_pending_keyboard()
     settings_keyboard = build_settings_keyboard()
+    delete_all_data_keyboard = build_delete_all_data_keyboard()
 
     main_texts = [button.text for row in main_keyboard.keyboard for button in row]
     pending_texts = [button.text for row in pending_keyboard.inline_keyboard for button in row]
     settings_texts = [button.text for row in settings_keyboard.inline_keyboard for button in row]
+    delete_all_texts = [
+        button.text for row in delete_all_data_keyboard.inline_keyboard for button in row
+    ]
 
     assert "📈 Week" in main_texts
     assert "🗓️ Month" in main_texts
     assert "💬 Add comment or fix" in pending_texts
     assert "📈 Weekly chart" in settings_texts
     assert "🗓️ Monthly chart" in settings_texts
+    assert "🧨 Delete all my data" in settings_texts
+    assert "🧨 Yes, delete everything" in delete_all_texts
 
 
 def test_manual_month_message_mentions_same_span_comparison() -> None:
@@ -92,3 +100,11 @@ def test_post_password_welcome_message_explains_bot_capabilities() -> None:
     assert "Welcome to Nibbler bot" in text
     assert "estimate calories from one meal photo at a time" in text
     assert "First, what should I call you?" in text
+
+
+def test_delete_all_data_confirmation_message_mentions_full_reset() -> None:
+    text = format_delete_all_data_confirmation_message()
+
+    assert "Delete all data?" in text
+    assert "saved meals" in text
+    assert "/start" in text
