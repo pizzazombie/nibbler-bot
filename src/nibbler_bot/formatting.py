@@ -194,6 +194,7 @@ def format_analysis_message(
             [
                 "",
                 "💬 Send any comment or correction and I'll include it in the next estimate.",
+                "⏱️ If you do nothing, I'll auto-save this meal in 10 minutes.",
             ]
         )
     return "\n".join(lines)

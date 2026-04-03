@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
+
+import aiosqlite
 
 from nibbler_bot.models import MealAnalysis, MealItem
 from nibbler_bot.storage import Storage
@@ -118,5 +121,46 @@ def test_delete_user_data_removes_all_user_records(tmp_path) -> None:
             report_period="2026-03-25_2026-03-31",
         ) is False
         assert await storage.delete_user_data(1) is False
+
+    asyncio.run(scenario())
+
+
+def test_storage_lists_pending_items_ready_for_auto_confirm(tmp_path) -> None:
+    async def scenario() -> None:
+        storage = Storage(str(tmp_path / "nibbler.db"))
+        await storage.initialize()
+        await storage.upsert_user_identity(chat_id=1, username="nibbler", first_name="Nib")
+        await storage.set_authorized(chat_id=1, month_key="2026-04", default_daily_calorie_limit=1800)
+
+        analysis = MealAnalysis(
+            items=[MealItem(name="Toast", amount="1 slice", calories=90)],
+            total_calories=90,
+            notes=[],
+            confidence="high",
+        )
+        await storage.save_pending_analysis(
+            chat_id=1,
+            telegram_file_id="file-1",
+            telegram_file_unique_id="uniq-1",
+            caption_text="Breakfast",
+            correction_text="",
+            analysis=analysis,
+        )
+
+        old_timestamp = (datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat()
+        async with aiosqlite.connect(tmp_path / "nibbler.db") as db:
+            await db.execute(
+                "UPDATE pending_analyses SET updated_at = ? WHERE chat_id = ?",
+                (old_timestamp, 1),
+            )
+            await db.commit()
+
+        pending_items = await storage.list_pending_analyses_ready_for_auto_confirm(
+            older_than_minutes=10
+        )
+
+        assert len(pending_items) == 1
+        assert pending_items[0].chat_id == 1
+        assert pending_items[0].updated_at == old_timestamp
 
     asyncio.run(scenario())

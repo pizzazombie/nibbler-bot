@@ -38,6 +38,7 @@ def test_pending_analysis_message_mentions_projection() -> None:
     assert "If saved:" in text
     assert "550 kcal" in text
     assert "Portion size estimated from the plate" in text
+    assert "auto-save this meal in 10 minutes" in text
 
 
 def test_keyboards_include_chart_buttons() -> None:

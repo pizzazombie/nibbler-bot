@@ -45,6 +45,7 @@ from .storage import Storage
 
 
 LOGGER = logging.getLogger(__name__)
+AUTO_CONFIRM_PENDING_MINUTES = 10
 INTRO_STICKER_FILE_ID = (
     "AAMCAgADGQEAAxppzkVlVj8jQfI1RuixLRkt5xyHJAAC15kAAk4vcEqLAWw2HmKH1QEAB20AAzoE"
 )
@@ -471,6 +472,64 @@ def register_handlers(
             reply_markup=build_main_keyboard(),
         )
 
+    def local_date_from_utc_iso(utc_iso: str) -> str:
+        timestamp = datetime.fromisoformat(utc_iso)
+        return timestamp.astimezone(settings.timezone).date().isoformat()
+
+    async def auto_confirm_pending_analyses(context: ContextTypes.DEFAULT_TYPE) -> None:
+        pending_items = await storage.list_pending_analyses_ready_for_auto_confirm(
+            older_than_minutes=AUTO_CONFIRM_PENDING_MINUTES
+        )
+        for pending in pending_items:
+            user = await storage.get_user(pending.chat_id)
+            if user is None or not user.is_ready:
+                await storage.clear_pending_analysis(pending.chat_id)
+                continue
+            local_date = local_date_from_utc_iso(pending.updated_at)
+            meal = await storage.confirm_pending_analysis(
+                chat_id=pending.chat_id,
+                local_date=local_date,
+            )
+            if meal is None:
+                continue
+            today_total = await storage.get_daily_total(
+                chat_id=user.chat_id,
+                local_date=local_date,
+            )
+            text = (
+                format_analysis_message(
+                    analysis=meal.analysis,
+                    today_total=today_total,
+                    daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+                    is_saved=True,
+                    display_name=user.display_name or user.first_name or "there",
+                )
+                + f"\n\n⏱️ Auto-saved after {AUTO_CONFIRM_PENDING_MINUTES} minutes."
+            )
+            try:
+                if pending.analysis_message_id is not None:
+                    try:
+                        await context.bot.edit_message_text(
+                            chat_id=pending.chat_id,
+                            message_id=pending.analysis_message_id,
+                            text=text,
+                            parse_mode=ParseMode.HTML,
+                        )
+                        continue
+                    except BadRequest:
+                        LOGGER.info(
+                            "Could not edit pending message for auto-save in chat %s",
+                            pending.chat_id,
+                        )
+                await context.bot.send_message(
+                    chat_id=pending.chat_id,
+                    text=text,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=build_main_keyboard(),
+                )
+            except Exception:
+                LOGGER.exception("Failed to notify chat %s about auto-saved meal", pending.chat_id)
+
     async def handle_password_text(message, user: UserProfile) -> None:
         now = local_now(settings)
         current_month = month_key(now)
@@ -772,22 +831,23 @@ def register_handlers(
             return
 
         if data == "meal:discard":
-            await query.answer()
             pending = await storage.get_pending_analysis(user.chat_id)
+            if pending is None:
+                await query.answer("This estimate is no longer pending.", show_alert=True)
+                return
+            await query.answer()
             await storage.clear_pending_analysis(user.chat_id)
-            text = "❌ This estimate was discarded and not added to today."
-            if pending is not None:
-                text = format_analysis_message(
-                    analysis=pending.analysis,
-                    today_total=await storage.get_daily_total(
-                        chat_id=user.chat_id,
-                        local_date=local_today(settings),
-                    ),
-                    daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
-                    is_saved=False,
-                    display_name=user.display_name or user.first_name or "there",
-                )
-                text = f"{text}\n\n<i>Discarded.</i>"
+            text = format_analysis_message(
+                analysis=pending.analysis,
+                today_total=await storage.get_daily_total(
+                    chat_id=user.chat_id,
+                    local_date=local_today(settings),
+                ),
+                daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+                is_saved=False,
+                display_name=user.display_name or user.first_name or "there",
+            )
+            text = f"{text}\n\n<i>Discarded.</i>"
             await query.edit_message_text(text=text, parse_mode=ParseMode.HTML)
             return
 
@@ -1041,6 +1101,12 @@ def register_handlers(
                 tzinfo=settings.timezone,
             ),
             name="monthly-summary",
+        )
+        app.job_queue.run_repeating(
+            auto_confirm_pending_analyses,
+            interval=60,
+            first=60,
+            name="auto-confirm-pending-meals",
         )
 
     application.post_init = post_init

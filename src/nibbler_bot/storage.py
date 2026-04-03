@@ -311,12 +311,45 @@ class Storage:
             correction_text=row["correction_text"],
             analysis=MealAnalysis.from_dict(json.loads(row["analysis_json"])),
             analysis_message_id=row["analysis_message_id"],
+            updated_at=row["updated_at"],
         )
 
     async def clear_pending_analysis(self, chat_id: int) -> None:
         async with aiosqlite.connect(self._database_path) as db:
             await db.execute("DELETE FROM pending_analyses WHERE chat_id = ?", (chat_id,))
             await db.commit()
+
+    async def list_pending_analyses_ready_for_auto_confirm(
+        self,
+        *,
+        older_than_minutes: int,
+    ) -> list[PendingAnalysis]:
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=older_than_minutes)
+        async with aiosqlite.connect(self._database_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT *
+                FROM pending_analyses
+                WHERE updated_at < ?
+                ORDER BY updated_at ASC
+                """,
+                (cutoff.isoformat(),),
+            )
+            rows = await cursor.fetchall()
+        return [
+            PendingAnalysis(
+                chat_id=row["chat_id"],
+                telegram_file_id=row["telegram_file_id"],
+                telegram_file_unique_id=row["telegram_file_unique_id"],
+                caption_text=row["caption_text"],
+                correction_text=row["correction_text"],
+                analysis=MealAnalysis.from_dict(json.loads(row["analysis_json"])),
+                analysis_message_id=row["analysis_message_id"],
+                updated_at=row["updated_at"],
+            )
+            for row in rows
+        ]
 
     async def confirm_pending_analysis(self, *, chat_id: int, local_date: str) -> MealEntry | None:
         pending = await self.get_pending_analysis(chat_id)

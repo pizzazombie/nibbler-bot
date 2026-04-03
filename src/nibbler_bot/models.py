@@ -81,6 +81,7 @@ class PendingAnalysis:
     correction_text: str
     analysis: MealAnalysis
     analysis_message_id: int | None
+    updated_at: str
 
 
 @dataclass(frozen=True, slots=True)
