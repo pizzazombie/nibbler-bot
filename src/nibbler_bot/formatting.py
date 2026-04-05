@@ -10,7 +10,7 @@ from telegram import (
     ReplyKeyboardMarkup,
 )
 
-from .models import DailyCalories, MealAnalysis, MealEntry, UserProfile
+from .models import DailyCalories, MealAnalysis, MealEntry, NutritionTotals, UserProfile
 
 
 def build_main_keyboard() -> ReplyKeyboardMarkup:
@@ -83,10 +83,38 @@ def build_meal_short_label(meal: MealEntry) -> str:
     return f"{meal.total_calories} kcal • {clock} • {safe_title}"
 
 
+def format_macro_grams(value: float) -> str:
+    rounded = round(float(value), 1)
+    if rounded.is_integer():
+        return str(int(rounded))
+    return f"{rounded:.1f}"
+
+
+def format_macros_inline(
+    *,
+    protein_g: float,
+    fat_g: float,
+    carbs_g: float,
+) -> str:
+    return (
+        f"P {format_macro_grams(protein_g)} g • "
+        f"F {format_macro_grams(fat_g)} g • "
+        f"C {format_macro_grams(carbs_g)} g"
+    )
+
+
+def format_nutrition_totals_line(label: str, totals: NutritionTotals) -> str:
+    return (
+        f"<b>{html.escape(label)}:</b> {totals.calories} kcal • "
+        f"{format_macros_inline(protein_g=totals.protein_g, fat_g=totals.fat_g, carbs_g=totals.carbs_g)}"
+    )
+
+
 def format_help_message() -> str:
     return (
         "👋 <b>Nibbler bot</b>\n\n"
-        "Send exactly one food or drink photo per message. You can also add a short caption like "
+        "Send exactly one food or drink photo per message. I will estimate calories plus protein, fat, and carbs. "
+        "You can also add a short caption like "
         "<i>\"and a glass of champagne\"</i>.\n\n"
         "After the estimate arrives, only these actions count:\n"
         "• tap <b>✅ Save meal</b> to add it to today\n"
@@ -108,12 +136,12 @@ def format_help_message() -> str:
 def format_post_password_welcome_message() -> str:
     return (
         "👋 <b>Welcome to Nibbler bot</b>\n\n"
-        "I help you track calories from food and drink photos, plus short text notes.\n\n"
+        "I help you track calories and macros from food and drink photos, plus short text notes.\n\n"
         "Here is what I can do:\n"
-        "• estimate calories from one meal photo at a time\n"
+        "• estimate calories plus protein, fat, and carbs from one meal photo at a time\n"
         "• include extra details like <i>\"also a glass of orange juice\"</i>\n"
         "• let you save, ignore, or correct each estimate before it counts\n"
-        "• keep your daily total and show weekly or monthly charts\n\n"
+        "• keep your daily calories and macros total and show weekly or monthly charts\n\n"
         "First, what should I call you?"
     )
 
@@ -138,18 +166,29 @@ def format_delete_all_data_confirmation_message() -> str:
     )
 
 
-def format_today_message(user: UserProfile, today_total: int, meals: list[MealEntry]) -> str:
+def format_today_message(
+    user: UserProfile,
+    today_totals: NutritionTotals,
+    meals: list[MealEntry],
+) -> str:
     limit = user.daily_calorie_limit or 0
     lines = [
         "📊 <b>Today</b>",
         "",
-        f"<b>Saved:</b> {today_total} / {limit} kcal",
+        format_nutrition_totals_line("Saved", today_totals),
+        f"<b>Calorie limit:</b> {today_totals.calories} / {limit} kcal",
     ]
     if meals:
         lines.extend(["", "<b>Meals:</b>"])
         for meal in meals[:8]:
+            macros = format_macros_inline(
+                protein_g=meal.analysis.total_protein_g,
+                fat_g=meal.analysis.total_fat_g,
+                carbs_g=meal.analysis.total_carbs_g,
+            )
             lines.append(
-                f"• {html.escape(meal.analysis.primary_item_name)} — {meal.total_calories} kcal"
+                f"• {html.escape(meal.analysis.primary_item_name)} — "
+                f"{meal.total_calories} kcal • {macros}"
             )
     else:
         lines.extend(["", "No saved meals yet."])
@@ -159,7 +198,7 @@ def format_today_message(user: UserProfile, today_total: int, meals: list[MealEn
 def format_analysis_message(
     *,
     analysis: MealAnalysis,
-    today_total: int,
+    today_totals: NutritionTotals,
     daily_limit: int,
     is_saved: bool,
     display_name: str,
@@ -170,21 +209,31 @@ def format_analysis_message(
         for item in analysis.items:
             amount = html.escape(item.amount or "estimated portion")
             name = html.escape(item.name or "Item")
-            lines.append(f"• {name} — {amount}: <b>{item.calories} kcal</b>")
+            macros = format_macros_inline(
+                protein_g=item.protein_g,
+                fat_g=item.fat_g,
+                carbs_g=item.carbs_g,
+            )
+            lines.append(
+                f"• {name} — {amount}: <b>{item.calories} kcal</b> • {macros}"
+            )
     else:
         lines.append("• I could not confidently identify the meal from this photo.")
+    meal_totals = analysis.nutrition_totals
     lines.extend(
         [
             "",
-            f"<b>Total:</b> {analysis.total_calories} kcal",
+            format_nutrition_totals_line("Total", meal_totals),
         ]
     )
     if is_saved:
-        lines.append(f"<b>Today:</b> {today_total} / {daily_limit} kcal")
+        lines.append(format_nutrition_totals_line("Today", today_totals))
+        lines.append(f"<b>Calorie limit:</b> {today_totals.calories} / {daily_limit} kcal")
     else:
-        projected_total = today_total + analysis.total_calories
-        lines.append(f"<b>Saved today:</b> {today_total} / {daily_limit} kcal")
-        lines.append(f"<b>If saved:</b> {projected_total} / {daily_limit} kcal")
+        projected_totals = today_totals.add(meal_totals)
+        lines.append(format_nutrition_totals_line("Saved today", today_totals))
+        lines.append(format_nutrition_totals_line("If saved", projected_totals))
+        lines.append(f"<b>Calorie limit if saved:</b> {projected_totals.calories} / {daily_limit} kcal")
     if analysis.notes:
         lines.extend(["", "<b>Notes:</b>"])
         for note in analysis.notes[:3]:
@@ -203,13 +252,20 @@ def format_analysis_message(
 def format_meal_deleted_message(
     *,
     meal: MealEntry,
-    today_total: int,
+    today_totals: NutritionTotals,
     daily_limit: int,
 ) -> str:
+    removed_macros = format_macros_inline(
+        protein_g=meal.analysis.total_protein_g,
+        fat_g=meal.analysis.total_fat_g,
+        carbs_g=meal.analysis.total_carbs_g,
+    )
     return (
         "🗑️ <b>Meal deleted</b>\n\n"
-        f"Removed: {html.escape(meal.analysis.primary_item_name)} — <b>{meal.total_calories} kcal</b>\n"
-        f"Today: <b>{today_total} / {daily_limit} kcal</b>"
+        f"Removed: {html.escape(meal.analysis.primary_item_name)} — <b>{meal.total_calories} kcal</b> • "
+        f"{removed_macros}\n"
+        f"{format_nutrition_totals_line('Today', today_totals)}\n"
+        f"<b>Calorie limit:</b> {today_totals.calories} / {daily_limit} kcal"
     )
 
 

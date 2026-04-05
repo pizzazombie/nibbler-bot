@@ -13,23 +13,33 @@ from nibbler_bot.formatting import (
     format_post_password_welcome_message,
 )
 from nibbler_bot.meal_analyzer import load_system_prompt
-from nibbler_bot.models import DailyCalories, MealAnalysis, MealItem, UserProfile
+from nibbler_bot.models import DailyCalories, MealAnalysis, MealItem, NutritionTotals, UserProfile
 
 
 def test_pending_analysis_message_mentions_projection() -> None:
     analysis = MealAnalysis(
         items=[
-            MealItem(name="Baked trout", amount="80 g", calories=430),
-            MealItem(name="Mashed potatoes", amount="120 g", calories=120),
+            MealItem(name="Baked trout", amount="80 g", calories=430, protein_g=26, fat_g=34, carbs_g=0),
+            MealItem(
+                name="Mashed potatoes",
+                amount="120 g",
+                calories=120,
+                protein_g=3,
+                fat_g=4,
+                carbs_g=20,
+            ),
         ],
         total_calories=550,
+        total_protein_g=29,
+        total_fat_g=38,
+        total_carbs_g=20,
         notes=["Portion size estimated from the plate"],
         confidence="medium",
     )
 
     text = format_analysis_message(
         analysis=analysis,
-        today_total=200,
+        today_totals=NutritionTotals(calories=200, protein_g=10, fat_g=5, carbs_g=12),
         daily_limit=1800,
         is_saved=False,
         display_name="Lev",
@@ -37,6 +47,9 @@ def test_pending_analysis_message_mentions_projection() -> None:
 
     assert "If saved:" in text
     assert "550 kcal" in text
+    assert "P 29 g" in text
+    assert "F 38 g" in text
+    assert "C 20 g" in text
     assert "Portion size estimated from the plate" in text
     assert "auto-save this meal in 10 minutes" in text
 
@@ -93,13 +106,14 @@ def test_system_prompt_is_loaded_from_text_file() -> None:
 
     assert "piece of processed cheese" in prompt
     assert "glass of orange juice" in prompt
+    assert "protein_g" in prompt
 
 
 def test_post_password_welcome_message_explains_bot_capabilities() -> None:
     text = format_post_password_welcome_message()
 
     assert "Welcome to Nibbler bot" in text
-    assert "estimate calories from one meal photo at a time" in text
+    assert "estimate calories plus protein, fat, and carbs" in text
     assert "First, what should I call you?" in text
 
 

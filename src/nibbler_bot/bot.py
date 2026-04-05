@@ -339,13 +339,13 @@ def register_handlers(
                 analysis=result.analysis,
                 analysis_message_id=previous_pending.analysis_message_id if previous_pending else None,
             )
-            today_total = await storage.get_daily_total(
+            today_totals = await storage.get_daily_nutrition(
                 chat_id=user.chat_id,
                 local_date=local_today(settings),
             )
             text = format_analysis_message(
                 analysis=result.analysis,
-                today_total=today_total,
+                today_totals=today_totals,
                 daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
                 is_saved=False,
                 display_name=user.display_name or user.first_name or "there",
@@ -381,10 +381,10 @@ def register_handlers(
 
     async def show_today(message, user: UserProfile) -> None:
         today = local_today(settings)
-        today_total = await storage.get_daily_total(chat_id=user.chat_id, local_date=today)
+        today_totals = await storage.get_daily_nutrition(chat_id=user.chat_id, local_date=today)
         meals = await storage.list_meals_for_day(chat_id=user.chat_id, local_date=today)
         await message.reply_text(
-            format_today_message(user, today_total, meals),
+            format_today_message(user, today_totals, meals),
             parse_mode=ParseMode.HTML,
             reply_markup=build_main_keyboard(),
         )
@@ -492,14 +492,14 @@ def register_handlers(
             )
             if meal is None:
                 continue
-            today_total = await storage.get_daily_total(
+            today_totals = await storage.get_daily_nutrition(
                 chat_id=user.chat_id,
                 local_date=local_date,
             )
             text = (
                 format_analysis_message(
                     analysis=meal.analysis,
-                    today_total=today_total,
+                    today_totals=today_totals,
                     daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
                     is_saved=True,
                     display_name=user.display_name or user.first_name or "there",
@@ -839,7 +839,7 @@ def register_handlers(
             await storage.clear_pending_analysis(user.chat_id)
             text = format_analysis_message(
                 analysis=pending.analysis,
-                today_total=await storage.get_daily_total(
+                today_totals=await storage.get_daily_nutrition(
                     chat_id=user.chat_id,
                     local_date=local_today(settings),
                 ),
@@ -860,11 +860,14 @@ def register_handlers(
                 await query.answer("Nothing to save.", show_alert=True)
                 return
             await query.answer()
-            today_total = await storage.get_daily_total(chat_id=user.chat_id, local_date=local_today(settings))
+            today_totals = await storage.get_daily_nutrition(
+                chat_id=user.chat_id,
+                local_date=local_today(settings),
+            )
             await query.edit_message_text(
                 text=format_analysis_message(
                     analysis=meal.analysis,
-                    today_total=today_total,
+                    today_totals=today_totals,
                     daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
                     is_saved=True,
                     display_name=user.display_name or user.first_name or "there",
@@ -908,10 +911,13 @@ def register_handlers(
 
         if data == "settings:today":
             await query.answer()
-            today_total = await storage.get_daily_total(chat_id=user.chat_id, local_date=local_today(settings))
+            today_totals = await storage.get_daily_nutrition(
+                chat_id=user.chat_id,
+                local_date=local_today(settings),
+            )
             meals = await storage.list_meals_for_day(chat_id=user.chat_id, local_date=local_today(settings))
             await query.edit_message_text(
-                text=format_today_message(user, today_total, meals),
+                text=format_today_message(user, today_totals, meals),
                 parse_mode=ParseMode.HTML,
             )
             return
@@ -975,11 +981,14 @@ def register_handlers(
                 await query.answer("That meal no longer exists.", show_alert=True)
                 return
             await query.answer()
-            today_total = await storage.get_daily_total(chat_id=user.chat_id, local_date=local_today(settings))
+            today_totals = await storage.get_daily_nutrition(
+                chat_id=user.chat_id,
+                local_date=local_today(settings),
+            )
             await query.edit_message_text(
                 text=format_meal_deleted_message(
                     meal=deleted,
-                    today_total=today_total,
+                    today_totals=today_totals,
                     daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
                 ),
                 parse_mode=ParseMode.HTML,

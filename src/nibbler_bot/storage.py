@@ -6,7 +6,7 @@ from pathlib import Path
 
 import aiosqlite
 
-from .models import DailyCalories, MealAnalysis, MealEntry, PendingAnalysis, UserProfile
+from .models import DailyCalories, MealAnalysis, MealEntry, NutritionTotals, PendingAnalysis, UserProfile
 
 
 def _utc_now_iso() -> str:
@@ -466,6 +466,31 @@ class Storage:
             )
             row = await cursor.fetchone()
         return int(row[0] or 0)
+
+    async def get_daily_nutrition(self, *, chat_id: int, local_date: str) -> NutritionTotals:
+        async with aiosqlite.connect(self._database_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT total_calories, analysis_json
+                FROM meal_entries
+                WHERE chat_id = ? AND local_date = ?
+                """,
+                (chat_id, local_date),
+            )
+            rows = await cursor.fetchall()
+        totals = NutritionTotals()
+        for row in rows:
+            analysis = MealAnalysis.from_dict(json.loads(row["analysis_json"]))
+            totals = totals.add(
+                NutritionTotals(
+                    calories=int(row["total_calories"] or 0),
+                    protein_g=analysis.total_protein_g,
+                    fat_g=analysis.total_fat_g,
+                    carbs_g=analysis.total_carbs_g,
+                )
+            )
+        return totals
 
     async def record_openai_usage(
         self,

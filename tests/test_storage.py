@@ -19,8 +19,20 @@ def test_storage_flow(tmp_path) -> None:
         await storage.update_daily_limit(1, 1900)
 
         analysis = MealAnalysis(
-            items=[MealItem(name="Coke Zero", amount="330 ml can", calories=3)],
+            items=[
+                MealItem(
+                    name="Coke Zero",
+                    amount="330 ml can",
+                    calories=3,
+                    protein_g=0,
+                    fat_g=0,
+                    carbs_g=0.2,
+                )
+            ],
             total_calories=3,
+            total_protein_g=0,
+            total_fat_g=0,
+            total_carbs_g=0.2,
             notes=["Recognized as a zero-sugar soda"],
             confidence="high",
         )
@@ -41,6 +53,9 @@ def test_storage_flow(tmp_path) -> None:
         assert meal.total_calories == 3
         assert await storage.get_pending_analysis(1) is None
         assert await storage.get_daily_total(chat_id=1, local_date="2026-04-01") == 3
+        daily_nutrition = await storage.get_daily_nutrition(chat_id=1, local_date="2026-04-01")
+        assert daily_nutrition.calories == 3
+        assert daily_nutrition.carbs_g == 0.2
 
         await storage.record_openai_usage(
             chat_id=1,
@@ -79,8 +94,20 @@ def test_delete_user_data_removes_all_user_records(tmp_path) -> None:
         await storage.update_daily_limit(1, 1900)
 
         analysis = MealAnalysis(
-            items=[MealItem(name="Coke Zero", amount="330 ml can", calories=3)],
+            items=[
+                MealItem(
+                    name="Coke Zero",
+                    amount="330 ml can",
+                    calories=3,
+                    protein_g=0,
+                    fat_g=0,
+                    carbs_g=0.2,
+                )
+            ],
             total_calories=3,
+            total_protein_g=0,
+            total_fat_g=0,
+            total_carbs_g=0.2,
             notes=["Recognized as a zero-sugar soda"],
             confidence="high",
         )
@@ -133,8 +160,11 @@ def test_storage_lists_pending_items_ready_for_auto_confirm(tmp_path) -> None:
         await storage.set_authorized(chat_id=1, month_key="2026-04", default_daily_calorie_limit=1800)
 
         analysis = MealAnalysis(
-            items=[MealItem(name="Toast", amount="1 slice", calories=90)],
+            items=[MealItem(name="Toast", amount="1 slice", calories=90, protein_g=3, fat_g=1, carbs_g=15)],
             total_calories=90,
+            total_protein_g=3,
+            total_fat_g=1,
+            total_carbs_g=15,
             notes=[],
             confidence="high",
         )

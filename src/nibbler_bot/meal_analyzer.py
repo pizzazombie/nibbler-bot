@@ -33,11 +33,17 @@ RESPONSE_SCHEMA: dict[str, object] = {
                     "name": {"type": "string"},
                     "amount": {"type": "string"},
                     "calories": {"type": "integer"},
+                    "protein_g": {"type": "number"},
+                    "fat_g": {"type": "number"},
+                    "carbs_g": {"type": "number"},
                 },
-                "required": ["name", "amount", "calories"],
+                "required": ["name", "amount", "calories", "protein_g", "fat_g", "carbs_g"],
             },
         },
         "total_calories": {"type": "integer"},
+        "total_protein_g": {"type": "number"},
+        "total_fat_g": {"type": "number"},
+        "total_carbs_g": {"type": "number"},
         "notes": {
             "type": "array",
             "items": {"type": "string"},
@@ -47,7 +53,15 @@ RESPONSE_SCHEMA: dict[str, object] = {
             "enum": ["low", "medium", "high"],
         },
     },
-    "required": ["items", "total_calories", "notes", "confidence"],
+    "required": [
+        "items",
+        "total_calories",
+        "total_protein_g",
+        "total_fat_g",
+        "total_carbs_g",
+        "notes",
+        "confidence",
+    ],
 }
 
 
@@ -114,11 +128,17 @@ class MealAnalyzer:
                     name=str(item.get("name", "")).strip(),
                     amount=str(item.get("amount", "")).strip(),
                     calories=int(item.get("calories", 0)),
+                    protein_g=round(float(item.get("protein_g", 0) or 0), 1),
+                    fat_g=round(float(item.get("fat_g", 0) or 0), 1),
+                    carbs_g=round(float(item.get("carbs_g", 0) or 0), 1),
                 )
                 for item in payload.get("items", [])
                 if isinstance(item, dict)
             ],
             total_calories=int(payload.get("total_calories", 0)),
+            total_protein_g=round(float(payload.get("total_protein_g", 0) or 0), 1),
+            total_fat_g=round(float(payload.get("total_fat_g", 0) or 0), 1),
+            total_carbs_g=round(float(payload.get("total_carbs_g", 0) or 0), 1),
             notes=[str(note).strip() for note in payload.get("notes", []) if str(note).strip()],
             confidence=str(payload.get("confidence", "medium") or "medium"),
         )
@@ -129,10 +149,10 @@ class MealAnalyzer:
         normalized_caption = caption_text.strip() or "No caption provided."
         normalized_correction = correction_text.strip() or "No follow-up correction provided."
         return (
-            "Estimate calories for exactly what the user consumed.\n"
+            "Estimate calories and macros for exactly what the user consumed.\n"
             f"Original user note: {normalized_caption}\n"
             f"Follow-up correction: {normalized_correction}\n"
-            "Return a clean breakdown plus a total."
+            "Return a clean breakdown plus totals for calories, protein, fat, and carbs."
         )
 
     def _extract_usage(self, response: object) -> OpenAIUsage:
