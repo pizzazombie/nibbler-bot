@@ -11,6 +11,7 @@ from nibbler_bot.formatting import (
     format_analysis_message,
     format_manual_monthly_chart_message,
     format_post_password_welcome_message,
+    format_today_message,
 )
 from nibbler_bot.meal_analyzer import load_system_prompt
 from nibbler_bot.models import DailyCalories, MealAnalysis, MealItem, NutritionTotals, UserProfile
@@ -45,11 +46,13 @@ def test_pending_analysis_message_mentions_projection() -> None:
         display_name="Lev",
     )
 
-    assert "If saved:" in text
+    assert "With this meal:" in text
     assert "550 kcal" in text
     assert "P 29 g" in text
     assert "F 38 g" in text
     assert "C 20 g" in text
+    assert "Saved today:</b> 200 / 1800 kcal" in text
+    assert "With this meal:</b> 750 / 1800 kcal" in text
     assert "Portion size estimated from the plate" in text
     assert "auto-save this meal in 10 minutes" in text
 
@@ -123,3 +126,30 @@ def test_delete_all_data_confirmation_message_mentions_full_reset() -> None:
     assert "Delete all data?" in text
     assert "saved meals" in text
     assert "/start" in text
+
+
+def test_today_message_shows_macros_on_separate_lines() -> None:
+    user = UserProfile(
+        chat_id=1,
+        username="nibbler",
+        first_name="Nib",
+        display_name="Lev",
+        daily_calorie_limit=1800,
+        is_authorized=True,
+        password_attempts=0,
+        password_attempt_month="2026-04",
+        onboarding_state=None,
+        state_payload={},
+    )
+
+    text = format_today_message(
+        user,
+        NutritionTotals(calories=620, protein_g=26, fat_g=74, carbs_g=32),
+        meals=[],
+    )
+
+    assert "Saved:</b> 620 / 1800 kcal" in text
+    assert "P (Protein):</b> 26 g" in text
+    assert "F (Fat):</b> 74 g" in text
+    assert "C (Carbs):</b> 32 g" in text
+    assert "Calorie limit" not in text

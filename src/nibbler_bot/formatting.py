@@ -175,8 +175,10 @@ def format_today_message(
     lines = [
         "📊 <b>Today</b>",
         "",
-        format_nutrition_totals_line("Saved", today_totals),
-        f"<b>Calorie limit:</b> {today_totals.calories} / {limit} kcal",
+        f"<b>Saved:</b> {today_totals.calories} / {limit} kcal",
+        f"<b>P (Protein):</b> {format_macro_grams(today_totals.protein_g)} g",
+        f"<b>F (Fat):</b> {format_macro_grams(today_totals.fat_g)} g",
+        f"<b>C (Carbs):</b> {format_macro_grams(today_totals.carbs_g)} g",
     ]
     if meals:
         lines.extend(["", "<b>Meals:</b>"])
@@ -227,13 +229,26 @@ def format_analysis_message(
         ]
     )
     if is_saved:
-        lines.append(format_nutrition_totals_line("Today", today_totals))
-        lines.append(f"<b>Calorie limit:</b> {today_totals.calories} / {daily_limit} kcal")
+        lines.extend(
+            [
+                "",
+                f"<b>Today:</b> {today_totals.calories} / {daily_limit} kcal",
+                f"<b>P (Protein):</b> {format_macro_grams(today_totals.protein_g)} g",
+                f"<b>F (Fat):</b> {format_macro_grams(today_totals.fat_g)} g",
+                f"<b>C (Carbs):</b> {format_macro_grams(today_totals.carbs_g)} g",
+            ]
+        )
     else:
         projected_totals = today_totals.add(meal_totals)
-        lines.append(format_nutrition_totals_line("Saved today", today_totals))
-        lines.append(format_nutrition_totals_line("If saved", projected_totals))
-        lines.append(f"<b>Calorie limit if saved:</b> {projected_totals.calories} / {daily_limit} kcal")
+        lines.extend(
+            [
+                "",
+                f"<b>Saved today:</b> {today_totals.calories} / {daily_limit} kcal • "
+                f"{format_macros_inline(protein_g=today_totals.protein_g, fat_g=today_totals.fat_g, carbs_g=today_totals.carbs_g)}",
+                f"<b>With this meal:</b> {projected_totals.calories} / {daily_limit} kcal • "
+                f"{format_macros_inline(protein_g=projected_totals.protein_g, fat_g=projected_totals.fat_g, carbs_g=projected_totals.carbs_g)}",
+            ]
+        )
     if analysis.notes:
         lines.extend(["", "<b>Notes:</b>"])
         for note in analysis.notes[:3]:
