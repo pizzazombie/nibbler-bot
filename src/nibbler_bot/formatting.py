@@ -113,8 +113,8 @@ def format_nutrition_totals_line(label: str, totals: NutritionTotals) -> str:
 def format_help_message() -> str:
     return (
         "👋 <b>Nibbler bot</b>\n\n"
-        "Send exactly one food or drink photo per message. I will estimate calories plus protein, fat, and carbs. "
-        "You can also add a short caption like "
+        "Send exactly one food or drink photo per message, or just describe the meal in text. "
+        "I will estimate calories plus protein, fat, and carbs. You can also add a short caption like "
         "<i>\"and a glass of champagne\"</i>.\n\n"
         "After the estimate arrives, only these actions count:\n"
         "• tap <b>✅ Save meal</b> to add it to today\n"
@@ -122,7 +122,7 @@ def format_help_message() -> str:
         "• send a comment like <i>\"It was Coke Zero\"</i> or <i>\"also a glass of orange juice\"</i> "
         "to re-run the same photo\n\n"
         "Important:\n"
-        "• if you send a new photo, the old pending estimate is replaced\n"
+        "• if you send a new photo or a new text meal, the old pending estimate is replaced\n"
         "• if you send several photos as an album, I will ask for one at a time\n"
         "• only saved meals affect your daily total\n\n"
         "Use <b>⚙️ Settings</b> to change your name, change your daily calorie goal, or delete a meal "
@@ -138,7 +138,7 @@ def format_post_password_welcome_message() -> str:
         "👋 <b>Welcome to Nibbler bot</b>\n\n"
         "I help you track calories and macros from food and drink photos, plus short text notes.\n\n"
         "Here is what I can do:\n"
-        "• estimate calories plus protein, fat, and carbs from one meal photo at a time\n"
+        "• estimate calories plus protein, fat, and carbs from one meal photo or a text description\n"
         "• include extra details like <i>\"also a glass of orange juice\"</i>\n"
         "• let you save, ignore, or correct each estimate before it counts\n"
         "• keep your daily calories and macros total and show weekly or monthly charts\n\n"

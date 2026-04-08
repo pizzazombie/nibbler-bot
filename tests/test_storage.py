@@ -194,3 +194,42 @@ def test_storage_lists_pending_items_ready_for_auto_confirm(tmp_path) -> None:
         assert pending_items[0].updated_at == old_timestamp
 
     asyncio.run(scenario())
+
+
+def test_text_only_pending_analysis_can_be_saved(tmp_path) -> None:
+    async def scenario() -> None:
+        storage = Storage(str(tmp_path / "nibbler.db"))
+        await storage.initialize()
+        await storage.upsert_user_identity(chat_id=1, username="nibbler", first_name="Nib")
+        await storage.set_authorized(chat_id=1, month_key="2026-04", default_daily_calorie_limit=1800)
+
+        analysis = MealAnalysis(
+            items=[MealItem(name="Greek yogurt", amount="200 g", calories=146, protein_g=20, fat_g=5, carbs_g=8)],
+            total_calories=146,
+            total_protein_g=20,
+            total_fat_g=5,
+            total_carbs_g=8,
+            notes=[],
+            confidence="high",
+        )
+        await storage.save_pending_analysis(
+            chat_id=1,
+            telegram_file_id="",
+            telegram_file_unique_id="",
+            caption_text="200 g Greek yogurt",
+            correction_text="",
+            analysis=analysis,
+        )
+
+        pending = await storage.get_pending_analysis(1)
+        assert pending is not None
+        assert pending.telegram_file_id == ""
+        meal = await storage.confirm_pending_analysis(chat_id=1, local_date="2026-04-01")
+        assert meal is not None
+        assert meal.total_calories == 146
+        nutrition = await storage.get_daily_nutrition(chat_id=1, local_date="2026-04-01")
+        assert nutrition.protein_g == 20
+        assert nutrition.fat_g == 5
+        assert nutrition.carbs_g == 8
+
+    asyncio.run(scenario())

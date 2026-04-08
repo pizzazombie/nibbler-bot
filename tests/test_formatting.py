@@ -9,6 +9,7 @@ from nibbler_bot.formatting import (
     build_settings_keyboard,
     format_delete_all_data_confirmation_message,
     format_analysis_message,
+    format_help_message,
     format_manual_monthly_chart_message,
     format_post_password_welcome_message,
     format_today_message,
@@ -110,6 +111,7 @@ def test_system_prompt_is_loaded_from_text_file() -> None:
     assert "piece of processed cheese" in prompt
     assert "glass of orange juice" in prompt
     assert "protein_g" in prompt
+    assert "text meal description" in prompt
 
 
 def test_post_password_welcome_message_explains_bot_capabilities() -> None:
@@ -117,6 +119,7 @@ def test_post_password_welcome_message_explains_bot_capabilities() -> None:
 
     assert "Welcome to Nibbler bot" in text
     assert "estimate calories plus protein, fat, and carbs" in text
+    assert "text description" in text
     assert "First, what should I call you?" in text
 
 
@@ -153,3 +156,10 @@ def test_today_message_shows_macros_on_separate_lines() -> None:
     assert "F (Fat):</b> 74 g" in text
     assert "C (Carbs):</b> 32 g" in text
     assert "Calorie limit" not in text
+
+
+def test_help_message_mentions_text_only_meals() -> None:
+    text = format_help_message()
+
+    assert "describe the meal in text" in text
+    assert "new photo or a new text meal" in text

@@ -163,7 +163,7 @@ def register_handlers(
                 await message.reply_text(
                     (
                         f"Hey {escape(user.display_name or 'there')} 👋\n\n"
-                        "Send one food photo and I’ll estimate the calories. "
+                        "Send one food photo or describe the meal in text and I’ll estimate the calories. "
                         "Only meals saved with ✅ count toward today."
                     ),
                     parse_mode=ParseMode.HTML,
@@ -265,7 +265,7 @@ def register_handlers(
             await application.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=pending.analysis_message_id,
-                text="🆕 This estimate was replaced by a newer photo.",
+                text="🆕 This estimate was replaced by a newer meal input.",
             )
         except BadRequest:
             LOGGER.info("Could not mark previous pending estimate as replaced in chat %s", chat_id)
@@ -296,7 +296,7 @@ def register_handlers(
         )
         return False
 
-    async def analyze_photo(
+    async def analyze_meal_input(
         *,
         message,
         user: UserProfile,
@@ -310,13 +310,17 @@ def register_handlers(
             return
         await supersede_previous_pending(user.chat_id, previous_pending)
         await application.bot.send_chat_action(chat_id=user.chat_id, action=ChatAction.TYPING)
-        status_message = await message.reply_text("🔎 Estimating calories...")
+        status_message = await message.reply_text("🔎 Estimating meal...")
         try:
-            telegram_file = await application.bot.get_file(telegram_file_id)
-            image_bytes = bytes(await telegram_file.download_as_bytearray())
+            image_bytes: bytes | None = None
+            mime_type: str | None = None
+            if telegram_file_id:
+                telegram_file = await application.bot.get_file(telegram_file_id)
+                image_bytes = bytes(await telegram_file.download_as_bytearray())
+                mime_type = photo_mime_type(telegram_file.file_path)
             result = await analyzer.analyze(
                 image_bytes=image_bytes,
-                mime_type=photo_mime_type(telegram_file.file_path),
+                mime_type=mime_type,
                 caption_text=caption_text,
                 correction_text=correction_text,
             )
@@ -362,7 +366,7 @@ def register_handlers(
         except Exception:
             LOGGER.exception("Meal analysis failed for chat %s", user.chat_id)
             await message.reply_text(
-                "I couldn't analyze that photo right now. Please try again in a moment.",
+                "I couldn't analyze that meal right now. Please try again in a moment.",
                 reply_markup=build_main_keyboard(),
             )
         finally:
@@ -394,7 +398,7 @@ def register_handlers(
         await message.reply_text(
             (
                 "🚀 Nibbler shipped.\n\n"
-                "Try sending me a photo of any food or drink and I'll estimate it.\n"
+                "Try sending me a photo of any food or drink, or just describe what you ate, and I'll estimate it.\n"
                 "If I miss something, just send a comment and I'll update the estimate 🙂"
             ),
             reply_markup=build_main_keyboard(),
@@ -612,7 +616,7 @@ def register_handlers(
                 (
                     f"🎯 Daily goal saved: <b>{limit} kcal</b>\n\n"
                     "You're all set.\n"
-                    "Send me a photo of what you ate or drank and I'll check it."
+                    "Send me a photo of what you ate or drank, or just describe it in text, and I'll check it."
                 ),
                 parse_mode=ParseMode.HTML,
                 reply_markup=build_main_keyboard(),
@@ -756,7 +760,7 @@ def register_handlers(
             return
         pending = await storage.get_pending_analysis(user.chat_id)
         if pending is not None:
-            await analyze_photo(
+            await analyze_meal_input(
                 message=message,
                 user=user,
                 telegram_file_id=pending.telegram_file_id,
@@ -766,9 +770,14 @@ def register_handlers(
                 previous_pending=pending,
             )
             return
-        await message.reply_text(
-            "Send one meal photo to start. If you already got an estimate, send a correction message before saving it.",
-            reply_markup=build_main_keyboard(),
+        await analyze_meal_input(
+            message=message,
+            user=user,
+            telegram_file_id="",
+            telegram_file_unique_id="",
+            caption_text=text,
+            correction_text="",
+            previous_pending=None,
         )
 
     async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -790,7 +799,7 @@ def register_handlers(
             return
         largest_photo = message.photo[-1]
         pending = await storage.get_pending_analysis(user.chat_id)
-        await analyze_photo(
+        await analyze_meal_input(
             message=message,
             user=user,
             telegram_file_id=largest_photo.file_id,

@@ -83,13 +83,22 @@ class MealAnalyzer:
     async def analyze(
         self,
         *,
-        image_bytes: bytes,
-        mime_type: str,
+        image_bytes: bytes | None,
+        mime_type: str | None,
         caption_text: str,
         correction_text: str,
     ) -> AnalysisResult:
-        image_b64 = base64.b64encode(image_bytes).decode("ascii")
         prompt = self._build_user_prompt(caption_text=caption_text, correction_text=correction_text)
+        content: list[dict[str, object]] = [{"type": "input_text", "text": prompt}]
+        if image_bytes is not None and mime_type is not None:
+            image_b64 = base64.b64encode(image_bytes).decode("ascii")
+            content.append(
+                {
+                    "type": "input_image",
+                    "detail": "high",
+                    "image_url": f"data:{mime_type};base64,{image_b64}",
+                }
+            )
         response = await self._client.responses.create(
             model=self._settings.openai_model,
             instructions=load_system_prompt(),
@@ -102,14 +111,7 @@ class MealAnalyzer:
             input=[
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": prompt},
-                        {
-                            "type": "input_image",
-                            "detail": "high",
-                            "image_url": f"data:{mime_type};base64,{image_b64}",
-                        },
-                    ],
+                    "content": content,
                 },
             ],
             text={
@@ -150,6 +152,7 @@ class MealAnalyzer:
         normalized_correction = correction_text.strip() or "No follow-up correction provided."
         return (
             "Estimate calories and macros for exactly what the user consumed.\n"
+            "The user may provide a photo, a text-only meal description, or both.\n"
             f"Original user note: {normalized_caption}\n"
             f"Follow-up correction: {normalized_correction}\n"
             "Return a clean breakdown plus totals for calories, protein, fat, and carbs."
