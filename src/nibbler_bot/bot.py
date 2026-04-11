@@ -20,7 +20,7 @@ from telegram.ext import (
     filters,
 )
 
-from .charts import build_nutrition_chart
+from .charts import build_weekly_chart
 from .config import Settings
 from .formatting import (
     build_delete_all_data_keyboard,
@@ -433,14 +433,14 @@ def register_handlers(
     async def send_weekly_chart(message, user: UserProfile) -> None:
         end_date = local_now(settings).date()
         start_date = end_date - timedelta(days=6)
-        points = await storage.get_daily_nutrition_between(
+        points = await storage.get_daily_calories_between(
             chat_id=user.chat_id,
             start_date=start_date,
             end_date=end_date,
         )
-        chart_bytes = build_nutrition_chart(
+        chart_bytes = build_weekly_chart(
             points=points,
-            targets=user.nutrition_targets,
+            daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
             title="Nibbler weekly chart",
             subtitle=f"{start_date.isoformat()} to {end_date.isoformat()}",
         )
@@ -465,19 +465,19 @@ def register_handlers(
             previous_month_start + timedelta(days=comparable_days),
             previous_month_end_full,
         )
-        points = await storage.get_daily_nutrition_between(
+        points = await storage.get_daily_calories_between(
             chat_id=user.chat_id,
             start_date=start_date,
             end_date=end_date,
         )
-        previous_points = await storage.get_daily_nutrition_between(
+        previous_points = await storage.get_daily_calories_between(
             chat_id=user.chat_id,
             start_date=previous_month_start,
             end_date=previous_end_date,
         )
-        chart_bytes = build_nutrition_chart(
+        chart_bytes = build_weekly_chart(
             points=points,
-            targets=user.nutrition_targets,
+            daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
             title="Nibbler month-to-date chart",
             subtitle=f"{start_date.isoformat()} to {end_date.isoformat()}",
         )
@@ -1118,15 +1118,15 @@ def register_handlers(
                 report_period=period_key,
             ):
                 continue
-            points = await storage.get_daily_nutrition_between(
+            points = await storage.get_daily_calories_between(
                 chat_id=user.chat_id,
                 start_date=start_date,
                 end_date=end_date,
             )
-            chart_bytes = build_nutrition_chart(
+            chart_bytes = build_weekly_chart(
                 points=points,
-                targets=user.nutrition_targets,
-                title="Nibbler weekly nutrition",
+                daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+                title="Nibbler weekly calories",
                 subtitle=f"{start_date.isoformat()} to {end_date.isoformat()}",
             )
             await context.bot.send_photo(
@@ -1162,12 +1162,12 @@ def register_handlers(
                 report_period=period_key,
             ):
                 continue
-            points = await storage.get_daily_nutrition_between(
+            points = await storage.get_daily_calories_between(
                 chat_id=user.chat_id,
                 start_date=period_start,
                 end_date=period_end,
             )
-            previous_points = await storage.get_daily_nutrition_between(
+            previous_points = await storage.get_daily_calories_between(
                 chat_id=user.chat_id,
                 start_date=previous_start,
                 end_date=previous_end,
