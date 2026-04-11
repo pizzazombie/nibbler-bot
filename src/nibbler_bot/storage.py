@@ -6,7 +6,17 @@ from pathlib import Path
 
 import aiosqlite
 
-from .models import DailyCalories, MealAnalysis, MealEntry, NutritionTotals, PendingAnalysis, UserProfile
+from .models import (
+    DailyCalories,
+    DailyNutrition,
+    MealAnalysis,
+    MealEntry,
+    NutritionTotals,
+    PendingAnalysis,
+    UserProfile,
+    calculate_macro_limits,
+    normalize_nutrition_goal,
+)
 
 
 def _utc_now_iso() -> str:
@@ -30,6 +40,10 @@ class Storage:
                     first_name TEXT,
                     display_name TEXT,
                     daily_calorie_limit INTEGER,
+                    nutrition_goal TEXT,
+                    protein_limit_g INTEGER,
+                    fat_limit_g INTEGER,
+                    carbs_limit_g INTEGER,
                     is_authorized INTEGER NOT NULL DEFAULT 0,
                     password_attempts INTEGER NOT NULL DEFAULT 0,
                     password_attempt_month TEXT,
@@ -88,7 +102,65 @@ class Storage:
                 );
                 """
             )
+            await self._ensure_user_columns(db)
+            await self._backfill_missing_macro_limits(db)
             await db.commit()
+
+    async def _ensure_user_columns(self, db: aiosqlite.Connection) -> None:
+        cursor = await db.execute("PRAGMA table_info(users)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        desired_columns = {
+            "nutrition_goal": "ALTER TABLE users ADD COLUMN nutrition_goal TEXT",
+            "protein_limit_g": "ALTER TABLE users ADD COLUMN protein_limit_g INTEGER",
+            "fat_limit_g": "ALTER TABLE users ADD COLUMN fat_limit_g INTEGER",
+            "carbs_limit_g": "ALTER TABLE users ADD COLUMN carbs_limit_g INTEGER",
+        }
+        for column_name, statement in desired_columns.items():
+            if column_name not in columns:
+                await db.execute(statement)
+
+    async def _backfill_missing_macro_limits(self, db: aiosqlite.Connection) -> None:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """
+            SELECT chat_id, daily_calorie_limit, nutrition_goal, protein_limit_g, fat_limit_g, carbs_limit_g
+            FROM users
+            WHERE daily_calorie_limit IS NOT NULL
+            """
+        )
+        rows = await cursor.fetchall()
+        for row in rows:
+            goal = normalize_nutrition_goal(row["nutrition_goal"])
+            defaults = calculate_macro_limits(int(row["daily_calorie_limit"]), goal)
+            protein_limit = row["protein_limit_g"] if row["protein_limit_g"] is not None else defaults.protein_g
+            fat_limit = row["fat_limit_g"] if row["fat_limit_g"] is not None else defaults.fat_g
+            carbs_limit = row["carbs_limit_g"] if row["carbs_limit_g"] is not None else defaults.carbs_g
+            if (
+                row["nutrition_goal"] == goal
+                and row["protein_limit_g"] is not None
+                and row["fat_limit_g"] is not None
+                and row["carbs_limit_g"] is not None
+            ):
+                continue
+            await db.execute(
+                """
+                UPDATE users
+                SET nutrition_goal = ?,
+                    protein_limit_g = ?,
+                    fat_limit_g = ?,
+                    carbs_limit_g = ?,
+                    updated_at = ?
+                WHERE chat_id = ?
+                """,
+                (
+                    goal,
+                    int(protein_limit),
+                    int(fat_limit),
+                    int(carbs_limit),
+                    _utc_now_iso(),
+                    row["chat_id"],
+                ),
+            )
 
     async def upsert_user_identity(
         self,
@@ -133,6 +205,10 @@ class Storage:
             first_name=row["first_name"],
             display_name=row["display_name"],
             daily_calorie_limit=row["daily_calorie_limit"],
+            nutrition_goal=row["nutrition_goal"],
+            protein_limit_g=row["protein_limit_g"],
+            fat_limit_g=row["fat_limit_g"],
+            carbs_limit_g=row["carbs_limit_g"],
             is_authorized=bool(row["is_authorized"]),
             password_attempts=row["password_attempts"],
             password_attempt_month=row["password_attempt_month"],
@@ -217,14 +293,80 @@ class Storage:
             await db.commit()
 
     async def update_daily_limit(self, chat_id: int, daily_calorie_limit: int) -> None:
+        user = await self.get_user(chat_id)
+        goal = normalize_nutrition_goal(user.nutrition_goal if user else None)
+        targets = calculate_macro_limits(daily_calorie_limit, goal)
         async with aiosqlite.connect(self._database_path) as db:
             await db.execute(
                 """
                 UPDATE users
-                SET daily_calorie_limit = ?, updated_at = ?
+                SET daily_calorie_limit = ?,
+                    nutrition_goal = ?,
+                    protein_limit_g = ?,
+                    fat_limit_g = ?,
+                    carbs_limit_g = ?,
+                    updated_at = ?
                 WHERE chat_id = ?
                 """,
-                (daily_calorie_limit, _utc_now_iso(), chat_id),
+                (
+                    daily_calorie_limit,
+                    goal,
+                    int(targets.protein_g),
+                    int(targets.fat_g),
+                    int(targets.carbs_g),
+                    _utc_now_iso(),
+                    chat_id,
+                ),
+            )
+            await db.commit()
+
+    async def update_nutrition_goal(self, chat_id: int, nutrition_goal: str) -> NutritionTotals:
+        user = await self.get_user(chat_id)
+        calorie_limit = user.daily_calorie_limit if user and user.daily_calorie_limit else 0
+        goal = normalize_nutrition_goal(nutrition_goal)
+        targets = calculate_macro_limits(calorie_limit, goal)
+        async with aiosqlite.connect(self._database_path) as db:
+            await db.execute(
+                """
+                UPDATE users
+                SET nutrition_goal = ?,
+                    protein_limit_g = ?,
+                    fat_limit_g = ?,
+                    carbs_limit_g = ?,
+                    updated_at = ?
+                WHERE chat_id = ?
+                """,
+                (
+                    goal,
+                    int(targets.protein_g),
+                    int(targets.fat_g),
+                    int(targets.carbs_g),
+                    _utc_now_iso(),
+                    chat_id,
+                ),
+            )
+            await db.commit()
+        return targets
+
+    async def update_macro_limits(
+        self,
+        *,
+        chat_id: int,
+        protein_limit_g: int,
+        fat_limit_g: int,
+        carbs_limit_g: int,
+    ) -> None:
+        async with aiosqlite.connect(self._database_path) as db:
+            await db.execute(
+                """
+                UPDATE users
+                SET protein_limit_g = ?,
+                    fat_limit_g = ?,
+                    carbs_limit_g = ?,
+                    updated_at = ?
+                WHERE chat_id = ?
+                """,
+                (protein_limit_g, fat_limit_g, carbs_limit_g, _utc_now_iso(), chat_id),
             )
             await db.commit()
 
@@ -590,6 +732,10 @@ class Storage:
                 first_name=row["first_name"],
                 display_name=row["display_name"],
                 daily_calorie_limit=row["daily_calorie_limit"],
+                nutrition_goal=row["nutrition_goal"],
+                protein_limit_g=row["protein_limit_g"],
+                fat_limit_g=row["fat_limit_g"],
+                carbs_limit_g=row["carbs_limit_g"],
                 is_authorized=bool(row["is_authorized"]),
                 password_attempts=row["password_attempts"],
                 password_attempt_month=row["password_attempt_month"],
@@ -639,6 +785,56 @@ class Storage:
         while cursor_date <= end_date:
             iso_value = cursor_date.isoformat()
             result.append(DailyCalories(local_date=iso_value, calories=values.get(iso_value, 0)))
+            cursor_date += timedelta(days=1)
+        return result
+
+    async def get_daily_nutrition_between(
+        self,
+        *,
+        chat_id: int,
+        start_date: date,
+        end_date: date,
+    ) -> list[DailyNutrition]:
+        async with aiosqlite.connect(self._database_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT local_date, total_calories, analysis_json
+                FROM meal_entries
+                WHERE chat_id = ?
+                  AND local_date >= ?
+                  AND local_date <= ?
+                ORDER BY local_date ASC
+                """,
+                (chat_id, start_date.isoformat(), end_date.isoformat()),
+            )
+            rows = await cursor.fetchall()
+        values: dict[str, NutritionTotals] = {}
+        for row in rows:
+            analysis = MealAnalysis.from_dict(json.loads(row["analysis_json"]))
+            current = values.get(row["local_date"], NutritionTotals())
+            values[row["local_date"]] = current.add(
+                NutritionTotals(
+                    calories=int(row["total_calories"] or 0),
+                    protein_g=analysis.total_protein_g,
+                    fat_g=analysis.total_fat_g,
+                    carbs_g=analysis.total_carbs_g,
+                )
+            )
+        result: list[DailyNutrition] = []
+        cursor_date = start_date
+        while cursor_date <= end_date:
+            iso_value = cursor_date.isoformat()
+            totals = values.get(iso_value, NutritionTotals())
+            result.append(
+                DailyNutrition(
+                    local_date=iso_value,
+                    calories=totals.calories,
+                    protein_g=totals.protein_g,
+                    fat_g=totals.fat_g,
+                    carbs_g=totals.carbs_g,
+                )
+            )
             cursor_date += timedelta(days=1)
         return result
 

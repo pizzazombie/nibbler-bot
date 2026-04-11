@@ -233,3 +233,67 @@ def test_text_only_pending_analysis_can_be_saved(tmp_path) -> None:
         assert nutrition.carbs_g == 8
 
     asyncio.run(scenario())
+
+
+def test_initialize_migrates_existing_users_with_macro_limits(tmp_path) -> None:
+    async def scenario() -> None:
+        db_path = tmp_path / "nibbler.db"
+        async with aiosqlite.connect(db_path) as db:
+            await db.executescript(
+                """
+                CREATE TABLE users (
+                    chat_id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    first_name TEXT,
+                    display_name TEXT,
+                    daily_calorie_limit INTEGER,
+                    is_authorized INTEGER NOT NULL DEFAULT 0,
+                    password_attempts INTEGER NOT NULL DEFAULT 0,
+                    password_attempt_month TEXT,
+                    onboarding_state TEXT,
+                    state_payload TEXT NOT NULL DEFAULT '{}',
+                    last_seen_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                """
+            )
+            await db.execute(
+                """
+                INSERT INTO users (
+                    chat_id, username, first_name, display_name, daily_calorie_limit,
+                    is_authorized, password_attempts, password_attempt_month, onboarding_state,
+                    state_payload, last_seen_at, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    1,
+                    "nibbler",
+                    "Nib",
+                    "Lev",
+                    1800,
+                    1,
+                    0,
+                    "2026-04",
+                    None,
+                    "{}",
+                    "2026-04-01T00:00:00+00:00",
+                    "2026-04-01T00:00:00+00:00",
+                    "2026-04-01T00:00:00+00:00",
+                ),
+            )
+            await db.commit()
+
+        storage = Storage(str(db_path))
+        await storage.initialize()
+        user = await storage.get_user(1)
+
+        assert user is not None
+        assert user.nutrition_goal == "maintain"
+        assert user.protein_limit_g is not None
+        assert user.fat_limit_g is not None
+        assert user.carbs_limit_g is not None
+        assert user.is_ready
+
+    asyncio.run(scenario())

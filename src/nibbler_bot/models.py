@@ -3,6 +3,31 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 
 
+NUTRITION_GOALS: dict[str, tuple[str, tuple[float, float, float]]] = {
+    "lose": ("lose fat", (0.30, 0.25, 0.45)),
+    "maintain": ("maintain weight", (0.25, 0.30, 0.45)),
+    "gain": ("build muscle", (0.25, 0.25, 0.50)),
+}
+
+
+def normalize_nutrition_goal(goal: str | None) -> str:
+    normalized = (goal or "").strip().lower()
+    if normalized in NUTRITION_GOALS:
+        return normalized
+    return "maintain"
+
+
+def calculate_macro_limits(calorie_limit: int, goal: str | None) -> "NutritionTotals":
+    normalized_goal = normalize_nutrition_goal(goal)
+    protein_ratio, fat_ratio, carbs_ratio = NUTRITION_GOALS[normalized_goal][1]
+    return NutritionTotals(
+        calories=calorie_limit,
+        protein_g=round(calorie_limit * protein_ratio / 4),
+        fat_g=round(calorie_limit * fat_ratio / 9),
+        carbs_g=round(calorie_limit * carbs_ratio / 4),
+    )
+
+
 @dataclass(slots=True)
 class MealItem:
     name: str
@@ -101,6 +126,10 @@ class UserProfile:
     first_name: str | None
     display_name: str | None
     daily_calorie_limit: int | None
+    nutrition_goal: str | None
+    protein_limit_g: int | None
+    fat_limit_g: int | None
+    carbs_limit_g: int | None
     is_authorized: bool
     password_attempts: int
     password_attempt_month: str | None
@@ -109,7 +138,26 @@ class UserProfile:
 
     @property
     def is_ready(self) -> bool:
-        return self.is_authorized and bool(self.display_name) and self.daily_calorie_limit is not None
+        return (
+            self.is_authorized
+            and bool(self.display_name)
+            and self.daily_calorie_limit is not None
+            and self.protein_limit_g is not None
+            and self.fat_limit_g is not None
+            and self.carbs_limit_g is not None
+            and self.onboarding_state is None
+        )
+
+    @property
+    def nutrition_targets(self) -> NutritionTotals:
+        calorie_limit = self.daily_calorie_limit or 0
+        default_targets = calculate_macro_limits(calorie_limit, self.nutrition_goal)
+        return NutritionTotals(
+            calories=calorie_limit,
+            protein_g=self.protein_limit_g if self.protein_limit_g is not None else default_targets.protein_g,
+            fat_g=self.fat_limit_g if self.fat_limit_g is not None else default_targets.fat_g,
+            carbs_g=self.carbs_limit_g if self.carbs_limit_g is not None else default_targets.carbs_g,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +186,24 @@ class MealEntry:
 class DailyCalories:
     local_date: str
     calories: int
+
+
+@dataclass(frozen=True, slots=True)
+class DailyNutrition:
+    local_date: str
+    calories: int
+    protein_g: float
+    fat_g: float
+    carbs_g: float
+
+    @property
+    def nutrition_totals(self) -> NutritionTotals:
+        return NutritionTotals(
+            calories=self.calories,
+            protein_g=self.protein_g,
+            fat_g=self.fat_g,
+            carbs_g=self.carbs_g,
+        )
 
 
 @dataclass(frozen=True, slots=True)

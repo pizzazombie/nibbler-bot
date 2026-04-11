@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+import re
 from datetime import date, datetime, time, timedelta
 from html import escape
 
@@ -19,12 +20,13 @@ from telegram.ext import (
     filters,
 )
 
-from .charts import build_weekly_chart
+from .charts import build_nutrition_chart
 from .config import Settings
 from .formatting import (
     build_delete_all_data_keyboard,
     build_delete_meal_keyboard,
     build_main_keyboard,
+    build_nutrition_goal_keyboard,
     build_pending_keyboard,
     build_settings_keyboard,
     format_delete_all_data_confirmation_message,
@@ -40,7 +42,7 @@ from .formatting import (
 )
 from .meal_analyzer import MealAnalyzer
 from .monitoring import MonitoringService
-from .models import MealEntry, PendingAnalysis, UserProfile
+from .models import NUTRITION_GOALS, MealEntry, PendingAnalysis, UserProfile, normalize_nutrition_goal
 from .storage import Storage
 
 
@@ -173,6 +175,22 @@ def register_handlers(
             if user.onboarding_state == "awaiting_name":
                 await message.reply_text(
                     "Welcome to Nibbler bot 🍽️\n\nWhat should I call you?",
+                    reply_markup=build_main_keyboard(),
+                )
+                return
+            if user.onboarding_state == "awaiting_goal":
+                await message.reply_text(
+                    (
+                        "What are you using Nibbler for?\n\n"
+                        "I’ll use this to calculate starter protein/fat/carbs limits from your calorie goal. "
+                        "You can change macro limits later in Settings."
+                    ),
+                    reply_markup=build_nutrition_goal_keyboard(),
+                )
+                return
+            if user.onboarding_state == "awaiting_macro_limits_update":
+                await message.reply_text(
+                    "Send macro limits as three numbers: protein fat carbs. Example: 120 55 180.",
                     reply_markup=build_main_keyboard(),
                 )
                 return
@@ -350,7 +368,7 @@ def register_handlers(
             text = format_analysis_message(
                 analysis=result.analysis,
                 today_totals=today_totals,
-                daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+                daily_targets=user.nutrition_targets,
                 is_saved=False,
                 display_name=user.display_name or user.first_name or "there",
             )
@@ -415,14 +433,14 @@ def register_handlers(
     async def send_weekly_chart(message, user: UserProfile) -> None:
         end_date = local_now(settings).date()
         start_date = end_date - timedelta(days=6)
-        points = await storage.get_daily_calories_between(
+        points = await storage.get_daily_nutrition_between(
             chat_id=user.chat_id,
             start_date=start_date,
             end_date=end_date,
         )
-        chart_bytes = build_weekly_chart(
+        chart_bytes = build_nutrition_chart(
             points=points,
-            daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+            targets=user.nutrition_targets,
             title="Nibbler weekly chart",
             subtitle=f"{start_date.isoformat()} to {end_date.isoformat()}",
         )
@@ -447,19 +465,19 @@ def register_handlers(
             previous_month_start + timedelta(days=comparable_days),
             previous_month_end_full,
         )
-        points = await storage.get_daily_calories_between(
+        points = await storage.get_daily_nutrition_between(
             chat_id=user.chat_id,
             start_date=start_date,
             end_date=end_date,
         )
-        previous_points = await storage.get_daily_calories_between(
+        previous_points = await storage.get_daily_nutrition_between(
             chat_id=user.chat_id,
             start_date=previous_month_start,
             end_date=previous_end_date,
         )
-        chart_bytes = build_weekly_chart(
+        chart_bytes = build_nutrition_chart(
             points=points,
-            daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+            targets=user.nutrition_targets,
             title="Nibbler month-to-date chart",
             subtitle=f"{start_date.isoformat()} to {end_date.isoformat()}",
         )
@@ -504,7 +522,7 @@ def register_handlers(
                 format_analysis_message(
                     analysis=meal.analysis,
                     today_totals=today_totals,
-                    daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+                    daily_targets=user.nutrition_targets,
                     is_saved=True,
                     display_name=user.display_name or user.first_name or "there",
                 )
@@ -610,22 +628,60 @@ def register_handlers(
             await message.reply_text("Please choose a realistic daily limit between 500 and 10000 kcal.")
             return
         await storage.update_daily_limit(user.chat_id, limit)
-        await storage.set_onboarding_state(user.chat_id, None)
         if user.onboarding_state == "awaiting_limit":
+            await storage.set_onboarding_state(user.chat_id, "awaiting_goal")
             await message.reply_text(
                 (
                     f"🎯 Daily goal saved: <b>{limit} kcal</b>\n\n"
-                    "You're all set.\n"
-                    "Send me a photo of what you ate or drank, or just describe it in text, and I'll check it."
+                    "What are you using Nibbler for?\n"
+                    "I’ll calculate starter protein/fat/carbs limits from this. "
+                    "You can change macro limits later in Settings."
                 ),
                 parse_mode=ParseMode.HTML,
+                reply_markup=build_nutrition_goal_keyboard(),
+            )
+            return
+        await storage.set_onboarding_state(user.chat_id, None)
+        refreshed = await storage.get_user(user.chat_id)
+        targets = refreshed.nutrition_targets if refreshed else user.nutrition_targets
+        await message.reply_text(
+            (
+                f"🎯 Daily limit updated to <b>{limit} kcal</b>.\n\n"
+                "I recalculated macro limits from your goal:\n"
+                f"P {targets.protein_g:.0f} g • F {targets.fat_g:.0f} g • C {targets.carbs_g:.0f} g"
+            ),
+            parse_mode=ParseMode.HTML,
+            reply_markup=build_main_keyboard(),
+        )
+
+    async def handle_macro_limits_input(message, user: UserProfile) -> None:
+        raw = (message.text or "").strip()
+        values = [int(float(value.replace(",", "."))) for value in re.findall(r"\d+(?:[.,]\d+)?", raw)]
+        if len(values) < 3:
+            await message.reply_text(
+                "Please send three numbers: protein fat carbs. Example: 120 55 180.",
                 reply_markup=build_main_keyboard(),
             )
-            await send_shipped_sticker(message)
             return
+        protein_limit, fat_limit, carbs_limit = values[:3]
+        if not (0 <= protein_limit <= 500 and 0 <= fat_limit <= 300 and 0 <= carbs_limit <= 800):
+            await message.reply_text(
+                "Please choose realistic macro limits. Example: 120 55 180.",
+                reply_markup=build_main_keyboard(),
+            )
+            return
+        await storage.update_macro_limits(
+            chat_id=user.chat_id,
+            protein_limit_g=protein_limit,
+            fat_limit_g=fat_limit,
+            carbs_limit_g=carbs_limit,
+        )
+        await storage.set_onboarding_state(user.chat_id, None)
         await message.reply_text(
-            f"🎯 Daily limit updated to <b>{limit} kcal</b>.",
-            parse_mode=ParseMode.HTML,
+            (
+                "🥩 Macro limits updated.\n\n"
+                f"P {protein_limit} g • F {fat_limit} g • C {carbs_limit} g"
+            ),
             reply_markup=build_main_keyboard(),
         )
 
@@ -735,6 +791,15 @@ def register_handlers(
         if user.onboarding_state in {"awaiting_limit", "awaiting_limit_update"}:
             await handle_limit_input(message, user)
             return
+        if user.onboarding_state == "awaiting_goal":
+            await message.reply_text(
+                "Please choose one of the goal buttons so I can calculate starter macro limits.",
+                reply_markup=build_nutrition_goal_keyboard(),
+            )
+            return
+        if user.onboarding_state == "awaiting_macro_limits_update":
+            await handle_macro_limits_input(message, user)
+            return
         if text == "⚙️ Settings":
             refreshed = await storage.get_user(user.chat_id)
             if refreshed is not None:
@@ -819,13 +884,29 @@ def register_handlers(
         if user is None:
             await query.answer()
             return
+        data = query.data or ""
         if not user.is_authorized:
             await query.answer("Please unlock the bot first.", show_alert=True)
             return
-        if not user.is_ready and query.data not in {"settings:name", "settings:limit"}:
+        if not user.is_ready and data not in {"settings:name", "settings:limit"} and not data.startswith("goal:"):
             await query.answer("Finish setup first.", show_alert=True)
             return
-        data = query.data or ""
+        if data.startswith("goal:"):
+            goal = normalize_nutrition_goal(data.split(":", 1)[1])
+            await query.answer()
+            targets = await storage.update_nutrition_goal(user.chat_id, goal)
+            await storage.set_onboarding_state(user.chat_id, None)
+            goal_label = NUTRITION_GOALS[goal][0]
+            await query.edit_message_text(
+                (
+                    f"🥩 Macro limits set for <b>{escape(goal_label)}</b>.\n\n"
+                    f"P {targets.protein_g:.0f} g • F {targets.fat_g:.0f} g • C {targets.carbs_g:.0f} g\n\n"
+                    "You can change these later in ⚙️ Settings."
+                ),
+                parse_mode=ParseMode.HTML,
+            )
+            await send_shipped_sticker(query.message)
+            return
         if data == "meal:fix_hint":
             await query.answer(
                 (
@@ -852,7 +933,7 @@ def register_handlers(
                     chat_id=user.chat_id,
                     local_date=local_today(settings),
                 ),
-                daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+                daily_targets=user.nutrition_targets,
                 is_saved=False,
                 display_name=user.display_name or user.first_name or "there",
             )
@@ -877,7 +958,7 @@ def register_handlers(
                 text=format_analysis_message(
                     analysis=meal.analysis,
                     today_totals=today_totals,
-                    daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+                    daily_targets=user.nutrition_targets,
                     is_saved=True,
                     display_name=user.display_name or user.first_name or "there",
                 ),
@@ -914,6 +995,20 @@ def register_handlers(
             await storage.set_onboarding_state(user.chat_id, "awaiting_limit_update")
             await query.message.reply_text(
                 "Send the new daily calorie limit as a whole number.",
+                reply_markup=build_main_keyboard(),
+            )
+            return
+
+        if data == "settings:macros":
+            await query.answer()
+            await storage.set_onboarding_state(user.chat_id, "awaiting_macro_limits_update")
+            targets = user.nutrition_targets
+            await query.message.reply_text(
+                (
+                    "Send new macro limits as three numbers: protein fat carbs.\n\n"
+                    f"Current: P {targets.protein_g:.0f} g • F {targets.fat_g:.0f} g • C {targets.carbs_g:.0f} g\n"
+                    "Example: 120 55 180"
+                ),
                 reply_markup=build_main_keyboard(),
             )
             return
@@ -998,7 +1093,7 @@ def register_handlers(
                 text=format_meal_deleted_message(
                     meal=deleted,
                     today_totals=today_totals,
-                    daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
+                    daily_targets=user.nutrition_targets,
                 ),
                 parse_mode=ParseMode.HTML,
                 reply_markup=build_settings_keyboard(),
@@ -1023,15 +1118,15 @@ def register_handlers(
                 report_period=period_key,
             ):
                 continue
-            points = await storage.get_daily_calories_between(
+            points = await storage.get_daily_nutrition_between(
                 chat_id=user.chat_id,
                 start_date=start_date,
                 end_date=end_date,
             )
-            chart_bytes = build_weekly_chart(
+            chart_bytes = build_nutrition_chart(
                 points=points,
-                daily_limit=user.daily_calorie_limit or settings.default_daily_calorie_limit,
-                title="Nibbler weekly calories",
+                targets=user.nutrition_targets,
+                title="Nibbler weekly nutrition",
                 subtitle=f"{start_date.isoformat()} to {end_date.isoformat()}",
             )
             await context.bot.send_photo(
@@ -1067,12 +1162,12 @@ def register_handlers(
                 report_period=period_key,
             ):
                 continue
-            points = await storage.get_daily_calories_between(
+            points = await storage.get_daily_nutrition_between(
                 chat_id=user.chat_id,
                 start_date=period_start,
                 end_date=period_end,
             )
-            previous_points = await storage.get_daily_calories_between(
+            previous_points = await storage.get_daily_nutrition_between(
                 chat_id=user.chat_id,
                 start_date=previous_start,
                 end_date=previous_end,

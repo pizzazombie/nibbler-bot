@@ -42,7 +42,7 @@ def test_pending_analysis_message_mentions_projection() -> None:
     text = format_analysis_message(
         analysis=analysis,
         today_totals=NutritionTotals(calories=200, protein_g=10, fat_g=5, carbs_g=12),
-        daily_limit=1800,
+        daily_targets=NutritionTotals(calories=1800, protein_g=80, fat_g=34, carbs_g=44),
         is_saved=False,
         display_name="Lev",
     )
@@ -52,8 +52,8 @@ def test_pending_analysis_message_mentions_projection() -> None:
     assert "P 29 g" in text
     assert "F 38 g" in text
     assert "C 20 g" in text
-    assert "Saved today:</b> 200 / 1800 kcal" in text
-    assert "With this meal:</b> 750 / 1800 kcal" in text
+    assert "Saved today:</b> 200 / 1800 kcal • P 10/80 g • F 5/34 g • C 12/44 g" in text
+    assert "With this meal:</b> 750 / 1800 kcal • P 39/80 g • F 43/34 g • C 32/44 g" in text
     assert "Portion size estimated from the plate" in text
     assert "auto-save this meal in 10 minutes" in text
 
@@ -76,6 +76,7 @@ def test_keyboards_include_chart_buttons() -> None:
     assert "💬 Add comment or fix" in pending_texts
     assert "📈 Weekly chart" in settings_texts
     assert "🗓️ Monthly chart" in settings_texts
+    assert "🥩 Change macro limits" in settings_texts
     assert "🧨 Delete all my data" in settings_texts
     assert "🧨 Yes, delete everything" in delete_all_texts
 
@@ -87,6 +88,10 @@ def test_manual_month_message_mentions_same_span_comparison() -> None:
         first_name="Nib",
         display_name="Lev",
         daily_calorie_limit=1800,
+        nutrition_goal="maintain",
+        protein_limit_g=80,
+        fat_limit_g=34,
+        carbs_limit_g=44,
         is_authorized=True,
         password_attempts=0,
         password_attempt_month="2026-04",
@@ -138,6 +143,10 @@ def test_today_message_shows_macros_on_separate_lines() -> None:
         first_name="Nib",
         display_name="Lev",
         daily_calorie_limit=1800,
+        nutrition_goal="maintain",
+        protein_limit_g=80,
+        fat_limit_g=34,
+        carbs_limit_g=44,
         is_authorized=True,
         password_attempts=0,
         password_attempt_month="2026-04",
@@ -152,9 +161,9 @@ def test_today_message_shows_macros_on_separate_lines() -> None:
     )
 
     assert "Saved:</b> 620 / 1800 kcal" in text
-    assert "P (Protein):</b> 26 g" in text
-    assert "F (Fat):</b> 74 g" in text
-    assert "C (Carbs):</b> 32 g" in text
+    assert "P (Protein):</b> 26 / 80 g" in text
+    assert "F (Fat):</b> 74 / 34 g" in text
+    assert "C (Carbs):</b> 32 / 44 g" in text
     assert "Calorie limit" not in text
 
 
