@@ -18,6 +18,7 @@ Only confirmed meals count.
 - analyzes exactly one meal photo at a time
 - accepts text-only meal descriptions
 - accepts a caption with extra context
+- asks OpenAI to include approximate grams for solid food and milliliters for drinks
 - lets the user correct the estimate in plain English
 - stores daily calories, protein, fat, carbs, and fiber per user
 - asks for name, daily calorie goal, and nutrition goal during onboarding

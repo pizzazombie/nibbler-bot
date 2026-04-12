@@ -23,7 +23,7 @@ def test_pending_analysis_message_mentions_projection() -> None:
         items=[
             MealItem(
                 name="Baked trout",
-                amount="80 g",
+                amount="1 fillet (~80 g)",
                 calories=430,
                 protein_g=26,
                 fat_g=34,
@@ -58,6 +58,7 @@ def test_pending_analysis_message_mentions_projection() -> None:
     )
 
     assert "With this meal:" in text
+    assert "Baked trout — 1 fillet (~80 g)" in text
     assert "550 kcal" in text
     assert "P 29 g" in text
     assert "F 38 g" in text
@@ -129,6 +130,8 @@ def test_system_prompt_is_loaded_from_text_file() -> None:
     assert "glass of orange juice" in prompt
     assert "protein_g" in prompt
     assert "fiber_g" in prompt
+    assert "1 fillet (~120 g)" in prompt
+    assert "1 glass (~150 ml)" in prompt
     assert "text meal description" in prompt
 
 

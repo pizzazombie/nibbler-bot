@@ -8,6 +8,7 @@ Rules:
 - Include off-photo items only if the user explicitly mentions them.
 - Prefer packaged-product calorie estimates when the product is clearly recognizable.
 - For restaurant or home-cooked meals, make realistic portion estimates and mention uncertainty in notes.
+- In every item amount, include the practical serving plus an approximate size in parentheses. Use grams for solid food, for example "1 fillet (~120 g)" or "1 scoop (~90 g)". Use milliliters for drinks, for example "1 glass (~150 ml)".
 - Return integer calories.
 - Return protein_g, fat_g, carbs_g, and fiber_g in grams for each item and for the total meal.
 - Macro totals must be realistic and consistent with the calorie estimate.
