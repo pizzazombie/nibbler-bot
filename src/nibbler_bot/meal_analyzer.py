@@ -36,14 +36,24 @@ RESPONSE_SCHEMA: dict[str, object] = {
                     "protein_g": {"type": "number"},
                     "fat_g": {"type": "number"},
                     "carbs_g": {"type": "number"},
+                    "fiber_g": {"type": "number"},
                 },
-                "required": ["name", "amount", "calories", "protein_g", "fat_g", "carbs_g"],
+                "required": [
+                    "name",
+                    "amount",
+                    "calories",
+                    "protein_g",
+                    "fat_g",
+                    "carbs_g",
+                    "fiber_g",
+                ],
             },
         },
         "total_calories": {"type": "integer"},
         "total_protein_g": {"type": "number"},
         "total_fat_g": {"type": "number"},
         "total_carbs_g": {"type": "number"},
+        "total_fiber_g": {"type": "number"},
         "notes": {
             "type": "array",
             "items": {"type": "string"},
@@ -59,6 +69,7 @@ RESPONSE_SCHEMA: dict[str, object] = {
         "total_protein_g",
         "total_fat_g",
         "total_carbs_g",
+        "total_fiber_g",
         "notes",
         "confidence",
     ],
@@ -133,6 +144,7 @@ class MealAnalyzer:
                     protein_g=round(float(item.get("protein_g", 0) or 0), 1),
                     fat_g=round(float(item.get("fat_g", 0) or 0), 1),
                     carbs_g=round(float(item.get("carbs_g", 0) or 0), 1),
+                    fiber_g=round(float(item.get("fiber_g", 0) or 0), 1),
                 )
                 for item in payload.get("items", [])
                 if isinstance(item, dict)
@@ -141,6 +153,7 @@ class MealAnalyzer:
             total_protein_g=round(float(payload.get("total_protein_g", 0) or 0), 1),
             total_fat_g=round(float(payload.get("total_fat_g", 0) or 0), 1),
             total_carbs_g=round(float(payload.get("total_carbs_g", 0) or 0), 1),
+            total_fiber_g=round(float(payload.get("total_fiber_g", 0) or 0), 1),
             notes=[str(note).strip() for note in payload.get("notes", []) if str(note).strip()],
             confidence=str(payload.get("confidence", "medium") or "medium"),
         )
@@ -155,7 +168,7 @@ class MealAnalyzer:
             "The user may provide a photo, a text-only meal description, or both.\n"
             f"Original user note: {normalized_caption}\n"
             f"Follow-up correction: {normalized_correction}\n"
-            "Return a clean breakdown plus totals for calories, protein, fat, and carbs."
+            "Return a clean breakdown plus totals for calories, protein, fat, carbs, and fiber."
         )
 
     def _extract_usage(self, response: object) -> OpenAIUsage:

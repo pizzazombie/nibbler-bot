@@ -183,14 +183,14 @@ def register_handlers(
                     (
                         "What are you using Nibbler for?\n\n"
                         "I’ll use this to calculate starter protein/fat/carbs limits from your calorie goal. "
-                        "You can change macro limits later in Settings."
+                        "Fiber starts at 30 g/day. You can change nutrient limits later in Settings."
                     ),
                     reply_markup=build_nutrition_goal_keyboard(),
                 )
                 return
             if user.onboarding_state == "awaiting_macro_limits_update":
                 await message.reply_text(
-                    "Send macro limits as three numbers: protein fat carbs. Example: 120 55 180.",
+                    "Send nutrient limits as four numbers: protein fat carbs fiber. Example: 120 55 180 30.",
                     reply_markup=build_main_keyboard(),
                 )
                 return
@@ -635,7 +635,7 @@ def register_handlers(
                     f"🎯 Daily goal saved: <b>{limit} kcal</b>\n\n"
                     "What are you using Nibbler for?\n"
                     "I’ll calculate starter protein/fat/carbs limits from this. "
-                    "You can change macro limits later in Settings."
+                    "Fiber starts at 30 g/day. You can change nutrient limits later in Settings."
                 ),
                 parse_mode=ParseMode.HTML,
                 reply_markup=build_nutrition_goal_keyboard(),
@@ -647,8 +647,9 @@ def register_handlers(
         await message.reply_text(
             (
                 f"🎯 Daily limit updated to <b>{limit} kcal</b>.\n\n"
-                "I recalculated macro limits from your goal:\n"
-                f"P {targets.protein_g:.0f} g • F {targets.fat_g:.0f} g • C {targets.carbs_g:.0f} g"
+                "I recalculated macro limits from your goal and kept your fiber limit:\n"
+                f"P {targets.protein_g:.0f} g • F {targets.fat_g:.0f} g • "
+                f"C {targets.carbs_g:.0f} g • Fiber {targets.fiber_g:.0f} g"
             ),
             parse_mode=ParseMode.HTML,
             reply_markup=build_main_keyboard(),
@@ -657,16 +658,21 @@ def register_handlers(
     async def handle_macro_limits_input(message, user: UserProfile) -> None:
         raw = (message.text or "").strip()
         values = [int(float(value.replace(",", "."))) for value in re.findall(r"\d+(?:[.,]\d+)?", raw)]
-        if len(values) < 3:
+        if len(values) < 4:
             await message.reply_text(
-                "Please send three numbers: protein fat carbs. Example: 120 55 180.",
+                "Please send four numbers: protein fat carbs fiber. Example: 120 55 180 30.",
                 reply_markup=build_main_keyboard(),
             )
             return
-        protein_limit, fat_limit, carbs_limit = values[:3]
-        if not (0 <= protein_limit <= 500 and 0 <= fat_limit <= 300 and 0 <= carbs_limit <= 800):
+        protein_limit, fat_limit, carbs_limit, fiber_limit = values[:4]
+        if not (
+            0 <= protein_limit <= 500
+            and 0 <= fat_limit <= 300
+            and 0 <= carbs_limit <= 800
+            and 0 <= fiber_limit <= 150
+        ):
             await message.reply_text(
-                "Please choose realistic macro limits. Example: 120 55 180.",
+                "Please choose realistic nutrient limits. Example: 120 55 180 30.",
                 reply_markup=build_main_keyboard(),
             )
             return
@@ -675,12 +681,13 @@ def register_handlers(
             protein_limit_g=protein_limit,
             fat_limit_g=fat_limit,
             carbs_limit_g=carbs_limit,
+            fiber_limit_g=fiber_limit,
         )
         await storage.set_onboarding_state(user.chat_id, None)
         await message.reply_text(
             (
-                "🥩 Macro limits updated.\n\n"
-                f"P {protein_limit} g • F {fat_limit} g • C {carbs_limit} g"
+                "🥩 Nutrient limits updated.\n\n"
+                f"P {protein_limit} g • F {fat_limit} g • C {carbs_limit} g • Fiber {fiber_limit} g"
             ),
             reply_markup=build_main_keyboard(),
         )
@@ -793,7 +800,7 @@ def register_handlers(
             return
         if user.onboarding_state == "awaiting_goal":
             await message.reply_text(
-                "Please choose one of the goal buttons so I can calculate starter macro limits.",
+                "Please choose one of the goal buttons so I can calculate starter nutrient limits.",
                 reply_markup=build_nutrition_goal_keyboard(),
             )
             return
@@ -899,8 +906,9 @@ def register_handlers(
             goal_label = NUTRITION_GOALS[goal][0]
             await query.edit_message_text(
                 (
-                    f"🥩 Macro limits set for <b>{escape(goal_label)}</b>.\n\n"
-                    f"P {targets.protein_g:.0f} g • F {targets.fat_g:.0f} g • C {targets.carbs_g:.0f} g\n\n"
+                    f"🥩 Nutrient limits set for <b>{escape(goal_label)}</b>.\n\n"
+                    f"P {targets.protein_g:.0f} g • F {targets.fat_g:.0f} g • "
+                    f"C {targets.carbs_g:.0f} g • Fiber {targets.fiber_g:.0f} g\n\n"
                     "You can change these later in ⚙️ Settings."
                 ),
                 parse_mode=ParseMode.HTML,
@@ -1005,9 +1013,10 @@ def register_handlers(
             targets = user.nutrition_targets
             await query.message.reply_text(
                 (
-                    "Send new macro limits as three numbers: protein fat carbs.\n\n"
-                    f"Current: P {targets.protein_g:.0f} g • F {targets.fat_g:.0f} g • C {targets.carbs_g:.0f} g\n"
-                    "Example: 120 55 180"
+                    "Send new nutrient limits as four numbers: protein fat carbs fiber.\n\n"
+                    f"Current: P {targets.protein_g:.0f} g • F {targets.fat_g:.0f} g • "
+                    f"C {targets.carbs_g:.0f} g • Fiber {targets.fiber_g:.0f} g\n"
+                    "Example: 120 55 180 30"
                 ),
                 reply_markup=build_main_keyboard(),
             )

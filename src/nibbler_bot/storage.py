@@ -7,6 +7,7 @@ from pathlib import Path
 import aiosqlite
 
 from .models import (
+    DEFAULT_FIBER_LIMIT_G,
     DailyCalories,
     DailyNutrition,
     MealAnalysis,
@@ -44,6 +45,7 @@ class Storage:
                     protein_limit_g INTEGER,
                     fat_limit_g INTEGER,
                     carbs_limit_g INTEGER,
+                    fiber_limit_g INTEGER,
                     is_authorized INTEGER NOT NULL DEFAULT 0,
                     password_attempts INTEGER NOT NULL DEFAULT 0,
                     password_attempt_month TEXT,
@@ -114,6 +116,7 @@ class Storage:
             "protein_limit_g": "ALTER TABLE users ADD COLUMN protein_limit_g INTEGER",
             "fat_limit_g": "ALTER TABLE users ADD COLUMN fat_limit_g INTEGER",
             "carbs_limit_g": "ALTER TABLE users ADD COLUMN carbs_limit_g INTEGER",
+            "fiber_limit_g": "ALTER TABLE users ADD COLUMN fiber_limit_g INTEGER",
         }
         for column_name, statement in desired_columns.items():
             if column_name not in columns:
@@ -123,7 +126,7 @@ class Storage:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
             """
-            SELECT chat_id, daily_calorie_limit, nutrition_goal, protein_limit_g, fat_limit_g, carbs_limit_g
+            SELECT chat_id, daily_calorie_limit, nutrition_goal, protein_limit_g, fat_limit_g, carbs_limit_g, fiber_limit_g
             FROM users
             WHERE daily_calorie_limit IS NOT NULL
             """
@@ -135,11 +138,13 @@ class Storage:
             protein_limit = row["protein_limit_g"] if row["protein_limit_g"] is not None else defaults.protein_g
             fat_limit = row["fat_limit_g"] if row["fat_limit_g"] is not None else defaults.fat_g
             carbs_limit = row["carbs_limit_g"] if row["carbs_limit_g"] is not None else defaults.carbs_g
+            fiber_limit = row["fiber_limit_g"] if row["fiber_limit_g"] is not None else DEFAULT_FIBER_LIMIT_G
             if (
                 row["nutrition_goal"] == goal
                 and row["protein_limit_g"] is not None
                 and row["fat_limit_g"] is not None
                 and row["carbs_limit_g"] is not None
+                and row["fiber_limit_g"] is not None
             ):
                 continue
             await db.execute(
@@ -149,6 +154,7 @@ class Storage:
                     protein_limit_g = ?,
                     fat_limit_g = ?,
                     carbs_limit_g = ?,
+                    fiber_limit_g = ?,
                     updated_at = ?
                 WHERE chat_id = ?
                 """,
@@ -157,6 +163,7 @@ class Storage:
                     int(protein_limit),
                     int(fat_limit),
                     int(carbs_limit),
+                    int(fiber_limit),
                     _utc_now_iso(),
                     row["chat_id"],
                 ),
@@ -209,6 +216,7 @@ class Storage:
             protein_limit_g=row["protein_limit_g"],
             fat_limit_g=row["fat_limit_g"],
             carbs_limit_g=row["carbs_limit_g"],
+            fiber_limit_g=row["fiber_limit_g"],
             is_authorized=bool(row["is_authorized"]),
             password_attempts=row["password_attempts"],
             password_attempt_month=row["password_attempt_month"],
@@ -296,6 +304,7 @@ class Storage:
         user = await self.get_user(chat_id)
         goal = normalize_nutrition_goal(user.nutrition_goal if user else None)
         targets = calculate_macro_limits(daily_calorie_limit, goal)
+        fiber_limit = user.fiber_limit_g if user and user.fiber_limit_g is not None else DEFAULT_FIBER_LIMIT_G
         async with aiosqlite.connect(self._database_path) as db:
             await db.execute(
                 """
@@ -305,6 +314,7 @@ class Storage:
                     protein_limit_g = ?,
                     fat_limit_g = ?,
                     carbs_limit_g = ?,
+                    fiber_limit_g = ?,
                     updated_at = ?
                 WHERE chat_id = ?
                 """,
@@ -314,6 +324,7 @@ class Storage:
                     int(targets.protein_g),
                     int(targets.fat_g),
                     int(targets.carbs_g),
+                    int(fiber_limit),
                     _utc_now_iso(),
                     chat_id,
                 ),
@@ -325,6 +336,7 @@ class Storage:
         calorie_limit = user.daily_calorie_limit if user and user.daily_calorie_limit else 0
         goal = normalize_nutrition_goal(nutrition_goal)
         targets = calculate_macro_limits(calorie_limit, goal)
+        fiber_limit = user.fiber_limit_g if user and user.fiber_limit_g is not None else DEFAULT_FIBER_LIMIT_G
         async with aiosqlite.connect(self._database_path) as db:
             await db.execute(
                 """
@@ -333,6 +345,7 @@ class Storage:
                     protein_limit_g = ?,
                     fat_limit_g = ?,
                     carbs_limit_g = ?,
+                    fiber_limit_g = ?,
                     updated_at = ?
                 WHERE chat_id = ?
                 """,
@@ -341,12 +354,19 @@ class Storage:
                     int(targets.protein_g),
                     int(targets.fat_g),
                     int(targets.carbs_g),
+                    int(fiber_limit),
                     _utc_now_iso(),
                     chat_id,
                 ),
             )
             await db.commit()
-        return targets
+        return NutritionTotals(
+            calories=targets.calories,
+            protein_g=targets.protein_g,
+            fat_g=targets.fat_g,
+            carbs_g=targets.carbs_g,
+            fiber_g=fiber_limit,
+        )
 
     async def update_macro_limits(
         self,
@@ -355,6 +375,7 @@ class Storage:
         protein_limit_g: int,
         fat_limit_g: int,
         carbs_limit_g: int,
+        fiber_limit_g: int,
     ) -> None:
         async with aiosqlite.connect(self._database_path) as db:
             await db.execute(
@@ -363,10 +384,11 @@ class Storage:
                 SET protein_limit_g = ?,
                     fat_limit_g = ?,
                     carbs_limit_g = ?,
+                    fiber_limit_g = ?,
                     updated_at = ?
                 WHERE chat_id = ?
                 """,
-                (protein_limit_g, fat_limit_g, carbs_limit_g, _utc_now_iso(), chat_id),
+                (protein_limit_g, fat_limit_g, carbs_limit_g, fiber_limit_g, _utc_now_iso(), chat_id),
             )
             await db.commit()
 
@@ -630,6 +652,7 @@ class Storage:
                     protein_g=analysis.total_protein_g,
                     fat_g=analysis.total_fat_g,
                     carbs_g=analysis.total_carbs_g,
+                    fiber_g=analysis.total_fiber_g,
                 )
             )
         return totals
@@ -736,6 +759,7 @@ class Storage:
                 protein_limit_g=row["protein_limit_g"],
                 fat_limit_g=row["fat_limit_g"],
                 carbs_limit_g=row["carbs_limit_g"],
+                fiber_limit_g=row["fiber_limit_g"],
                 is_authorized=bool(row["is_authorized"]),
                 password_attempts=row["password_attempts"],
                 password_attempt_month=row["password_attempt_month"],
@@ -819,6 +843,7 @@ class Storage:
                     protein_g=analysis.total_protein_g,
                     fat_g=analysis.total_fat_g,
                     carbs_g=analysis.total_carbs_g,
+                    fiber_g=analysis.total_fiber_g,
                 )
             )
         result: list[DailyNutrition] = []
@@ -833,6 +858,7 @@ class Storage:
                     protein_g=totals.protein_g,
                     fat_g=totals.fat_g,
                     carbs_g=totals.carbs_g,
+                    fiber_g=totals.fiber_g,
                 )
             )
             cursor_date += timedelta(days=1)

@@ -2,7 +2,7 @@
 
 Your tiny Telegram calorie goblin.
 
-Send a food photo. Nibbler stares at it with OpenAI vision. Nibbler guesses what you ate, how much of it, and how many calories probably landed in your mortal body.
+Send a food photo or describe a meal in text. Nibbler stares at it with OpenAI vision, or reads your snack confession, then guesses what you ate, how much of it, and how many calories probably landed in your mortal body.
 
 Then it waits politely:
 
@@ -16,12 +16,13 @@ Only confirmed meals count.
 ## What It Does
 
 - analyzes exactly one meal photo at a time
+- accepts text-only meal descriptions
 - accepts a caption with extra context
 - lets the user correct the estimate in plain English
-- stores the daily calorie total per user
-- asks for name and daily calorie goal during onboarding
+- stores daily calories, protein, fat, carbs, and fiber per user
+- asks for name, daily calorie goal, and nutrition goal during onboarding
 - protects access with a password and monthly-reset attempt limits
-- lets the user change name, change limit, and delete today's meals from `⚙️ Settings`
+- lets the user change name, calorie limit, nutrient limits, and delete today's meals from `⚙️ Settings`
 - sends a Monday morning weekly recap with a generated chart
 - sends a monthly trend summary on the first day of the next month
 - tracks OpenAI usage cost, generation counts, and user activity in SQLite for future admin stats
@@ -167,8 +168,8 @@ Push to `main`, and GitHub Actions will:
 
 ### Meal Flow
 
-1. user sends one photo, optionally with text
-2. bot estimates items and calories
+1. user sends one photo, optionally with text, or just describes the meal
+2. bot estimates items, calories, protein, fat, carbs, and fiber
 3. user either saves it, ignores it, or sends a correction
 4. only saved meals affect the daily total
 

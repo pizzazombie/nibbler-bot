@@ -21,7 +21,15 @@ from nibbler_bot.models import DailyCalories, MealAnalysis, MealItem, NutritionT
 def test_pending_analysis_message_mentions_projection() -> None:
     analysis = MealAnalysis(
         items=[
-            MealItem(name="Baked trout", amount="80 g", calories=430, protein_g=26, fat_g=34, carbs_g=0),
+            MealItem(
+                name="Baked trout",
+                amount="80 g",
+                calories=430,
+                protein_g=26,
+                fat_g=34,
+                carbs_g=0,
+                fiber_g=0,
+            ),
             MealItem(
                 name="Mashed potatoes",
                 amount="120 g",
@@ -29,20 +37,22 @@ def test_pending_analysis_message_mentions_projection() -> None:
                 protein_g=3,
                 fat_g=4,
                 carbs_g=20,
+                fiber_g=2,
             ),
         ],
         total_calories=550,
         total_protein_g=29,
         total_fat_g=38,
         total_carbs_g=20,
+        total_fiber_g=2,
         notes=["Portion size estimated from the plate"],
         confidence="medium",
     )
 
     text = format_analysis_message(
         analysis=analysis,
-        today_totals=NutritionTotals(calories=200, protein_g=10, fat_g=5, carbs_g=12),
-        daily_targets=NutritionTotals(calories=1800, protein_g=80, fat_g=34, carbs_g=44),
+        today_totals=NutritionTotals(calories=200, protein_g=10, fat_g=5, carbs_g=12, fiber_g=3),
+        daily_targets=NutritionTotals(calories=1800, protein_g=80, fat_g=34, carbs_g=44, fiber_g=30),
         is_saved=False,
         display_name="Lev",
     )
@@ -52,8 +62,9 @@ def test_pending_analysis_message_mentions_projection() -> None:
     assert "P 29 g" in text
     assert "F 38 g" in text
     assert "C 20 g" in text
-    assert "Saved today:</b> 200 / 1800 kcal • P 10/80 g • F 5/34 g • C 12/44 g" in text
-    assert "With this meal:</b> 750 / 1800 kcal • P 39/80 g • F 43/34 g • C 32/44 g" in text
+    assert "Fiber 2 g" in text
+    assert "Saved today:</b> 200 / 1800 kcal • P 10/80 g • F 5/34 g • C 12/44 g • Fiber 3/30 g" in text
+    assert "With this meal:</b> 750 / 1800 kcal • P 39/80 g • F 43/34 g • C 32/44 g • Fiber 5/30 g" in text
     assert "Portion size estimated from the plate" in text
     assert "auto-save this meal in 10 minutes" in text
 
@@ -76,7 +87,7 @@ def test_keyboards_include_chart_buttons() -> None:
     assert "💬 Add comment or fix" in pending_texts
     assert "📈 Weekly chart" in settings_texts
     assert "🗓️ Monthly chart" in settings_texts
-    assert "🥩 Change macro limits" in settings_texts
+    assert "🥩 Change nutrient limits" in settings_texts
     assert "🧨 Delete all my data" in settings_texts
     assert "🧨 Yes, delete everything" in delete_all_texts
 
@@ -92,6 +103,7 @@ def test_manual_month_message_mentions_same_span_comparison() -> None:
         protein_limit_g=80,
         fat_limit_g=34,
         carbs_limit_g=44,
+        fiber_limit_g=30,
         is_authorized=True,
         password_attempts=0,
         password_attempt_month="2026-04",
@@ -116,6 +128,7 @@ def test_system_prompt_is_loaded_from_text_file() -> None:
     assert "piece of processed cheese" in prompt
     assert "glass of orange juice" in prompt
     assert "protein_g" in prompt
+    assert "fiber_g" in prompt
     assert "text meal description" in prompt
 
 
@@ -123,7 +136,7 @@ def test_post_password_welcome_message_explains_bot_capabilities() -> None:
     text = format_post_password_welcome_message()
 
     assert "Welcome to Nibbler bot" in text
-    assert "estimate calories plus protein, fat, and carbs" in text
+    assert "estimate calories plus protein, fat, carbs, and fiber" in text
     assert "text description" in text
     assert "First, what should I call you?" in text
 
@@ -147,6 +160,7 @@ def test_today_message_shows_macros_on_separate_lines() -> None:
         protein_limit_g=80,
         fat_limit_g=34,
         carbs_limit_g=44,
+        fiber_limit_g=30,
         is_authorized=True,
         password_attempts=0,
         password_attempt_month="2026-04",
@@ -156,7 +170,7 @@ def test_today_message_shows_macros_on_separate_lines() -> None:
 
     text = format_today_message(
         user,
-        NutritionTotals(calories=620, protein_g=26, fat_g=74, carbs_g=32),
+        NutritionTotals(calories=620, protein_g=26, fat_g=74, carbs_g=32, fiber_g=9),
         meals=[],
     )
 
@@ -164,6 +178,7 @@ def test_today_message_shows_macros_on_separate_lines() -> None:
     assert "P (Protein):</b> 26 / 80 g" in text
     assert "F (Fat):</b> 74 / 34 g" in text
     assert "C (Carbs):</b> 32 / 44 g" in text
+    assert "Fiber:</b> 9 / 30 g" in text
     assert "Calorie limit" not in text
 
 

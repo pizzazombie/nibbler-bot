@@ -8,6 +8,7 @@ NUTRITION_GOALS: dict[str, tuple[str, tuple[float, float, float]]] = {
     "maintain": ("maintain weight", (0.25, 0.30, 0.45)),
     "gain": ("build muscle", (0.25, 0.25, 0.50)),
 }
+DEFAULT_FIBER_LIMIT_G = 30
 
 
 def normalize_nutrition_goal(goal: str | None) -> str:
@@ -25,6 +26,7 @@ def calculate_macro_limits(calorie_limit: int, goal: str | None) -> "NutritionTo
         protein_g=round(calorie_limit * protein_ratio / 4),
         fat_g=round(calorie_limit * fat_ratio / 9),
         carbs_g=round(calorie_limit * carbs_ratio / 4),
+        fiber_g=DEFAULT_FIBER_LIMIT_G,
     )
 
 
@@ -36,6 +38,7 @@ class MealItem:
     protein_g: float = 0.0
     fat_g: float = 0.0
     carbs_g: float = 0.0
+    fiber_g: float = 0.0
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -47,6 +50,7 @@ class NutritionTotals:
     protein_g: float = 0.0
     fat_g: float = 0.0
     carbs_g: float = 0.0
+    fiber_g: float = 0.0
 
     def add(self, other: "NutritionTotals") -> "NutritionTotals":
         return NutritionTotals(
@@ -54,6 +58,7 @@ class NutritionTotals:
             protein_g=round(self.protein_g + other.protein_g, 1),
             fat_g=round(self.fat_g + other.fat_g, 1),
             carbs_g=round(self.carbs_g + other.carbs_g, 1),
+            fiber_g=round(self.fiber_g + other.fiber_g, 1),
         )
 
 
@@ -64,6 +69,7 @@ class MealAnalysis:
     total_protein_g: float = 0.0
     total_fat_g: float = 0.0
     total_carbs_g: float = 0.0
+    total_fiber_g: float = 0.0
     notes: list[str] = field(default_factory=list)
     confidence: str = "medium"
 
@@ -74,6 +80,7 @@ class MealAnalysis:
             "total_protein_g": self.total_protein_g,
             "total_fat_g": self.total_fat_g,
             "total_carbs_g": self.total_carbs_g,
+            "total_fiber_g": self.total_fiber_g,
             "notes": list(self.notes),
             "confidence": self.confidence,
         }
@@ -89,6 +96,7 @@ class MealAnalysis:
                 protein_g=round(float(item.get("protein_g", 0) or 0), 1),
                 fat_g=round(float(item.get("fat_g", 0) or 0), 1),
                 carbs_g=round(float(item.get("carbs_g", 0) or 0), 1),
+                fiber_g=round(float(item.get("fiber_g", 0) or 0), 1),
             )
             for item in raw_items
             if isinstance(item, dict)
@@ -99,6 +107,7 @@ class MealAnalysis:
             total_protein_g=round(float(payload.get("total_protein_g", 0) or 0), 1),
             total_fat_g=round(float(payload.get("total_fat_g", 0) or 0), 1),
             total_carbs_g=round(float(payload.get("total_carbs_g", 0) or 0), 1),
+            total_fiber_g=round(float(payload.get("total_fiber_g", 0) or 0), 1),
             notes=[str(item) for item in payload.get("notes", []) if str(item).strip()],
             confidence=str(payload.get("confidence", "medium") or "medium"),
         )
@@ -116,6 +125,7 @@ class MealAnalysis:
             protein_g=self.total_protein_g,
             fat_g=self.total_fat_g,
             carbs_g=self.total_carbs_g,
+            fiber_g=self.total_fiber_g,
         )
 
 
@@ -130,6 +140,7 @@ class UserProfile:
     protein_limit_g: int | None
     fat_limit_g: int | None
     carbs_limit_g: int | None
+    fiber_limit_g: int | None
     is_authorized: bool
     password_attempts: int
     password_attempt_month: str | None
@@ -145,6 +156,7 @@ class UserProfile:
             and self.protein_limit_g is not None
             and self.fat_limit_g is not None
             and self.carbs_limit_g is not None
+            and self.fiber_limit_g is not None
             and self.onboarding_state is None
         )
 
@@ -157,6 +169,7 @@ class UserProfile:
             protein_g=self.protein_limit_g if self.protein_limit_g is not None else default_targets.protein_g,
             fat_g=self.fat_limit_g if self.fat_limit_g is not None else default_targets.fat_g,
             carbs_g=self.carbs_limit_g if self.carbs_limit_g is not None else default_targets.carbs_g,
+            fiber_g=self.fiber_limit_g if self.fiber_limit_g is not None else default_targets.fiber_g,
         )
 
 
@@ -195,6 +208,7 @@ class DailyNutrition:
     protein_g: float
     fat_g: float
     carbs_g: float
+    fiber_g: float
 
     @property
     def nutrition_totals(self) -> NutritionTotals:
@@ -203,6 +217,7 @@ class DailyNutrition:
             protein_g=self.protein_g,
             fat_g=self.fat_g,
             carbs_g=self.carbs_g,
+            fiber_g=self.fiber_g,
         )
 
 

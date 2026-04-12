@@ -43,7 +43,7 @@ def build_settings_keyboard() -> InlineKeyboardMarkup:
         [
             [InlineKeyboardButton("✏️ Change name", callback_data="settings:name")],
             [InlineKeyboardButton("🎯 Change daily limit", callback_data="settings:limit")],
-            [InlineKeyboardButton("🥩 Change macro limits", callback_data="settings:macros")],
+            [InlineKeyboardButton("🥩 Change nutrient limits", callback_data="settings:macros")],
             [InlineKeyboardButton("🗑️ Delete a meal from today", callback_data="settings:delete")],
             [InlineKeyboardButton("🧨 Delete all my data", callback_data="settings:wipe")],
             [InlineKeyboardButton("📊 Show today", callback_data="settings:today")],
@@ -106,26 +106,31 @@ def format_macros_inline(
     protein_g: float,
     fat_g: float,
     carbs_g: float,
+    fiber_g: float | None = None,
 ) -> str:
-    return (
+    value = (
         f"P {format_macro_grams(protein_g)} g • "
         f"F {format_macro_grams(fat_g)} g • "
         f"C {format_macro_grams(carbs_g)} g"
     )
+    if fiber_g is not None:
+        value = f"{value} • Fiber {format_macro_grams(fiber_g)} g"
+    return value
 
 
-def format_macros_with_limits(totals: NutritionTotals, targets: NutritionTotals) -> str:
+def format_nutrients_with_limits(totals: NutritionTotals, targets: NutritionTotals) -> str:
     return (
         f"P {format_macro_grams(totals.protein_g)}/{format_macro_grams(targets.protein_g)} g • "
         f"F {format_macro_grams(totals.fat_g)}/{format_macro_grams(targets.fat_g)} g • "
-        f"C {format_macro_grams(totals.carbs_g)}/{format_macro_grams(targets.carbs_g)} g"
+        f"C {format_macro_grams(totals.carbs_g)}/{format_macro_grams(targets.carbs_g)} g • "
+        f"Fiber {format_macro_grams(totals.fiber_g)}/{format_macro_grams(targets.fiber_g)} g"
     )
 
 
 def format_nutrition_totals_line(label: str, totals: NutritionTotals) -> str:
     return (
         f"<b>{html.escape(label)}:</b> {totals.calories} kcal • "
-        f"{format_macros_inline(protein_g=totals.protein_g, fat_g=totals.fat_g, carbs_g=totals.carbs_g)}"
+        f"{format_macros_inline(protein_g=totals.protein_g, fat_g=totals.fat_g, carbs_g=totals.carbs_g, fiber_g=totals.fiber_g)}"
     )
 
 
@@ -133,7 +138,7 @@ def format_help_message() -> str:
     return (
         "👋 <b>Nibbler bot</b>\n\n"
         "Send exactly one food or drink photo per message, or just describe the meal in text. "
-        "I will estimate calories plus protein, fat, and carbs. You can also add a short caption like "
+        "I will estimate calories plus protein, fat, carbs, and fiber. You can also add a short caption like "
         "<i>\"and a glass of champagne\"</i>.\n\n"
         "After the estimate arrives, only these actions count:\n"
         "• tap <b>✅ Save meal</b> to add it to today\n"
@@ -144,7 +149,7 @@ def format_help_message() -> str:
         "• if you send a new photo or a new text meal, the old pending estimate is replaced\n"
         "• if you send several photos as an album, I will ask for one at a time\n"
         "• only saved meals affect your daily total\n\n"
-        "Use <b>⚙️ Settings</b> to change your name, daily calorie goal, macro limits, or delete a meal "
+        "Use <b>⚙️ Settings</b> to change your name, daily calorie goal, nutrient limits, or delete a meal "
         "that was saved by mistake.\n"
         "Use <b>📈 Week</b> or <b>🗓️ Month</b> to pull your charts on demand.\n\n"
         "Friendly note: all estimates are approximate. Packaged products are usually more accurate than "
@@ -155,12 +160,12 @@ def format_help_message() -> str:
 def format_post_password_welcome_message() -> str:
     return (
         "👋 <b>Welcome to Nibbler bot</b>\n\n"
-        "I help you track calories and macros from food and drink photos, plus short text notes.\n\n"
+        "I help you track calories, macros, and fiber from food and drink photos, plus short text notes.\n\n"
         "Here is what I can do:\n"
-        "• estimate calories plus protein, fat, and carbs from one meal photo or a text description\n"
+        "• estimate calories plus protein, fat, carbs, and fiber from one meal photo or a text description\n"
         "• include extra details like <i>\"also a glass of orange juice\"</i>\n"
         "• let you save, ignore, or correct each estimate before it counts\n"
-        "• keep your daily calories and macros total and show weekly or monthly charts\n\n"
+        "• keep your daily calories, macros, and fiber total and show weekly or monthly charts\n\n"
         "First, what should I call you?"
     )
 
@@ -173,7 +178,8 @@ def format_settings_message(user: UserProfile, today_total: int) -> str:
         f"⚙️ <b>Settings</b>\n\n"
         f"<b>Name:</b> {name}\n"
         f"<b>Daily limit:</b> {limit} kcal\n"
-        f"<b>Macro limits:</b> {format_macros_inline(protein_g=targets.protein_g, fat_g=targets.fat_g, carbs_g=targets.carbs_g)}\n"
+        f"<b>Nutrient limits:</b> "
+        f"{format_macros_inline(protein_g=targets.protein_g, fat_g=targets.fat_g, carbs_g=targets.carbs_g, fiber_g=targets.fiber_g)}\n"
         f"<b>Saved today:</b> {today_total} / {limit} kcal"
     )
 
@@ -201,6 +207,7 @@ def format_today_message(
         f"<b>P (Protein):</b> {format_macro_grams(today_totals.protein_g)} / {format_macro_grams(targets.protein_g)} g",
         f"<b>F (Fat):</b> {format_macro_grams(today_totals.fat_g)} / {format_macro_grams(targets.fat_g)} g",
         f"<b>C (Carbs):</b> {format_macro_grams(today_totals.carbs_g)} / {format_macro_grams(targets.carbs_g)} g",
+        f"<b>Fiber:</b> {format_macro_grams(today_totals.fiber_g)} / {format_macro_grams(targets.fiber_g)} g",
     ]
     if meals:
         lines.extend(["", "<b>Meals:</b>"])
@@ -209,6 +216,7 @@ def format_today_message(
                 protein_g=meal.analysis.total_protein_g,
                 fat_g=meal.analysis.total_fat_g,
                 carbs_g=meal.analysis.total_carbs_g,
+                fiber_g=meal.analysis.total_fiber_g,
             )
             lines.append(
                 f"• {html.escape(meal.analysis.primary_item_name)} — "
@@ -237,6 +245,7 @@ def format_analysis_message(
                 protein_g=item.protein_g,
                 fat_g=item.fat_g,
                 carbs_g=item.carbs_g,
+                fiber_g=item.fiber_g,
             )
             lines.append(
                 f"• {name} — {amount}: <b>{item.calories} kcal</b> • {macros}"
@@ -258,6 +267,7 @@ def format_analysis_message(
                 f"<b>P (Protein):</b> {format_macro_grams(today_totals.protein_g)} / {format_macro_grams(daily_targets.protein_g)} g",
                 f"<b>F (Fat):</b> {format_macro_grams(today_totals.fat_g)} / {format_macro_grams(daily_targets.fat_g)} g",
                 f"<b>C (Carbs):</b> {format_macro_grams(today_totals.carbs_g)} / {format_macro_grams(daily_targets.carbs_g)} g",
+                f"<b>Fiber:</b> {format_macro_grams(today_totals.fiber_g)} / {format_macro_grams(daily_targets.fiber_g)} g",
             ]
         )
     else:
@@ -266,9 +276,9 @@ def format_analysis_message(
             [
                 "",
                 f"<b>Saved today:</b> {today_totals.calories} / {daily_targets.calories} kcal • "
-                f"{format_macros_with_limits(today_totals, daily_targets)}",
+                f"{format_nutrients_with_limits(today_totals, daily_targets)}",
                 f"<b>With this meal:</b> {projected_totals.calories} / {daily_targets.calories} kcal • "
-                f"{format_macros_with_limits(projected_totals, daily_targets)}",
+                f"{format_nutrients_with_limits(projected_totals, daily_targets)}",
             ]
         )
     if analysis.notes:
@@ -296,13 +306,14 @@ def format_meal_deleted_message(
         protein_g=meal.analysis.total_protein_g,
         fat_g=meal.analysis.total_fat_g,
         carbs_g=meal.analysis.total_carbs_g,
+        fiber_g=meal.analysis.total_fiber_g,
     )
     return (
         "🗑️ <b>Meal deleted</b>\n\n"
         f"Removed: {html.escape(meal.analysis.primary_item_name)} — <b>{meal.total_calories} kcal</b> • "
         f"{removed_macros}\n"
         f"<b>Today:</b> {today_totals.calories} / {daily_targets.calories} kcal • "
-        f"{format_macros_with_limits(today_totals, daily_targets)}"
+        f"{format_nutrients_with_limits(today_totals, daily_targets)}"
     )
 
 

@@ -27,12 +27,14 @@ def test_storage_flow(tmp_path) -> None:
                     protein_g=0,
                     fat_g=0,
                     carbs_g=0.2,
+                    fiber_g=0,
                 )
             ],
             total_calories=3,
             total_protein_g=0,
             total_fat_g=0,
             total_carbs_g=0.2,
+            total_fiber_g=0,
             notes=["Recognized as a zero-sugar soda"],
             confidence="high",
         )
@@ -56,6 +58,7 @@ def test_storage_flow(tmp_path) -> None:
         daily_nutrition = await storage.get_daily_nutrition(chat_id=1, local_date="2026-04-01")
         assert daily_nutrition.calories == 3
         assert daily_nutrition.carbs_g == 0.2
+        assert daily_nutrition.fiber_g == 0
 
         await storage.record_openai_usage(
             chat_id=1,
@@ -102,12 +105,14 @@ def test_delete_user_data_removes_all_user_records(tmp_path) -> None:
                     protein_g=0,
                     fat_g=0,
                     carbs_g=0.2,
+                    fiber_g=0,
                 )
             ],
             total_calories=3,
             total_protein_g=0,
             total_fat_g=0,
             total_carbs_g=0.2,
+            total_fiber_g=0,
             notes=["Recognized as a zero-sugar soda"],
             confidence="high",
         )
@@ -160,11 +165,22 @@ def test_storage_lists_pending_items_ready_for_auto_confirm(tmp_path) -> None:
         await storage.set_authorized(chat_id=1, month_key="2026-04", default_daily_calorie_limit=1800)
 
         analysis = MealAnalysis(
-            items=[MealItem(name="Toast", amount="1 slice", calories=90, protein_g=3, fat_g=1, carbs_g=15)],
+            items=[
+                MealItem(
+                    name="Toast",
+                    amount="1 slice",
+                    calories=90,
+                    protein_g=3,
+                    fat_g=1,
+                    carbs_g=15,
+                    fiber_g=2,
+                )
+            ],
             total_calories=90,
             total_protein_g=3,
             total_fat_g=1,
             total_carbs_g=15,
+            total_fiber_g=2,
             notes=[],
             confidence="high",
         )
@@ -204,11 +220,22 @@ def test_text_only_pending_analysis_can_be_saved(tmp_path) -> None:
         await storage.set_authorized(chat_id=1, month_key="2026-04", default_daily_calorie_limit=1800)
 
         analysis = MealAnalysis(
-            items=[MealItem(name="Greek yogurt", amount="200 g", calories=146, protein_g=20, fat_g=5, carbs_g=8)],
+            items=[
+                MealItem(
+                    name="Greek yogurt",
+                    amount="200 g",
+                    calories=146,
+                    protein_g=20,
+                    fat_g=5,
+                    carbs_g=8,
+                    fiber_g=0,
+                )
+            ],
             total_calories=146,
             total_protein_g=20,
             total_fat_g=5,
             total_carbs_g=8,
+            total_fiber_g=0,
             notes=[],
             confidence="high",
         )
@@ -231,6 +258,7 @@ def test_text_only_pending_analysis_can_be_saved(tmp_path) -> None:
         assert nutrition.protein_g == 20
         assert nutrition.fat_g == 5
         assert nutrition.carbs_g == 8
+        assert nutrition.fiber_g == 0
 
     asyncio.run(scenario())
 
@@ -294,6 +322,7 @@ def test_initialize_migrates_existing_users_with_macro_limits(tmp_path) -> None:
         assert user.protein_limit_g is not None
         assert user.fat_limit_g is not None
         assert user.carbs_limit_g is not None
+        assert user.fiber_limit_g == 30
         assert user.is_ready
 
     asyncio.run(scenario())
