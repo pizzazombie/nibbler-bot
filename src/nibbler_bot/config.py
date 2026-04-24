@@ -74,8 +74,6 @@ class Settings:
     database_path: str
     openai_model: str
     openai_reasoning_effort: str | None
-    openai_complex_meal_model: str
-    openai_complex_reasoning_effort: str | None
     openai_max_output_tokens: int
     openai_request_timeout_seconds: int
     default_daily_calorie_limit: int
@@ -116,10 +114,6 @@ def load_settings() -> Settings:
         database_path=os.getenv("DATABASE_PATH", "/data/nibbler-bot.db").strip(),
         openai_model=model,
         openai_reasoning_effort=_optional_str("OPENAI_REASONING_EFFORT") or "low",
-        openai_complex_meal_model=os.getenv("OPENAI_COMPLEX_MEAL_MODEL", "gpt-5.4").strip(),
-        openai_complex_reasoning_effort=(
-            _optional_str("OPENAI_COMPLEX_MEAL_REASONING_EFFORT") or "medium"
-        ),
         openai_max_output_tokens=int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "800")),
         openai_request_timeout_seconds=int(os.getenv("OPENAI_REQUEST_TIMEOUT_SECONDS", "60")),
         default_daily_calorie_limit=int(os.getenv("DEFAULT_DAILY_CALORIE_LIMIT", "1800")),

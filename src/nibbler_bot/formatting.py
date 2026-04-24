@@ -291,7 +291,7 @@ def format_analysis_message(
             [
                 "",
                 f"❓ <b>Quick check:</b> {html.escape(analysis.follow_up_question)}",
-                "Reply with a short answer and I'll refine this estimate.",
+                "Reply with the answer and any fixes in one message, and I'll refine this estimate.",
             ]
         )
     if not is_saved:

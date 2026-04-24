@@ -19,6 +19,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from openai import APITimeoutError
 
 from .charts import build_weekly_chart
 from .config import Settings
@@ -40,7 +41,7 @@ from .formatting import (
     format_today_message,
     format_weekly_summary_message,
 )
-from .meal_analyzer import MealAnalyzer
+from .meal_analyzer import MealAnalyzer, MealAnalysisUserMessageError
 from .monitoring import MonitoringService
 from .models import NUTRITION_GOALS, MealEntry, PendingAnalysis, UserProfile, normalize_nutrition_goal
 from .storage import Storage
@@ -382,6 +383,18 @@ def register_handlers(
             )
             if message_id is not None:
                 await storage.set_pending_analysis_message_id(user.chat_id, message_id)
+        except MealAnalysisUserMessageError as exc:
+            LOGGER.warning("Meal analysis returned no usable structured result for chat %s", user.chat_id)
+            await message.reply_text(
+                exc.message,
+                reply_markup=build_main_keyboard(),
+            )
+        except APITimeoutError:
+            LOGGER.warning("Meal analysis timed out for chat %s", user.chat_id)
+            await message.reply_text(
+                "That meal estimate took too long. Please try again, or send a short text description with the photo.",
+                reply_markup=build_main_keyboard(),
+            )
         except Exception:
             LOGGER.exception("Meal analysis failed for chat %s", user.chat_id)
             await message.reply_text(
