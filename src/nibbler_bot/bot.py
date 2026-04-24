@@ -342,16 +342,17 @@ def register_handlers(
                 caption_text=caption_text,
                 correction_text=correction_text,
             )
-            await storage.record_openai_usage(
-                chat_id=user.chat_id,
-                local_date=local_today(settings),
-                request_kind="meal_analysis",
-                model=settings.openai_model,
-                input_tokens=result.usage.input_tokens,
-                cached_input_tokens=result.usage.cached_input_tokens,
-                output_tokens=result.usage.output_tokens,
-                total_cost_usd=result.usage.total_cost_usd,
-            )
+            for request in result.requests:
+                await storage.record_openai_usage(
+                    chat_id=user.chat_id,
+                    local_date=local_today(settings),
+                    request_kind=request.request_kind,
+                    model=request.model,
+                    input_tokens=request.usage.input_tokens,
+                    cached_input_tokens=request.usage.cached_input_tokens,
+                    output_tokens=request.usage.output_tokens,
+                    total_cost_usd=request.usage.total_cost_usd,
+                )
             await storage.save_pending_analysis(
                 chat_id=user.chat_id,
                 telegram_file_id=telegram_file_id,
@@ -922,6 +923,8 @@ def register_handlers(
                     "Examples:\n"
                     "• there was also a piece of processed cheese on the plate\n"
                     "• I also drank a glass of orange juice\n"
+                    "• there were 11 olives, not 7\n"
+                    "• the bean side dish was closer to half a cup\n"
                     "• it was Coke Zero 🙂"
                 ),
                 show_alert=True,

@@ -47,6 +47,7 @@ def test_pending_analysis_message_mentions_projection() -> None:
         total_fiber_g=2,
         notes=["Portion size estimated from the plate"],
         confidence="medium",
+        follow_up_question="Was that closer to 8 olives or 12?",
     )
 
     text = format_analysis_message(
@@ -67,6 +68,8 @@ def test_pending_analysis_message_mentions_projection() -> None:
     assert "Saved today:</b> 200 / 1800 kcal • P 10/80 g • F 5/34 g • C 12/44 g • Fiber 3/30 g" in text
     assert "With this meal:</b> 750 / 1800 kcal • P 39/80 g • F 43/34 g • C 32/44 g • Fiber 5/30 g" in text
     assert "Portion size estimated from the plate" in text
+    assert "Quick check:" in text
+    assert "Was that closer to 8 olives or 12?" in text
     assert "auto-save this meal in 10 minutes" in text
 
 
@@ -132,6 +135,8 @@ def test_system_prompt_is_loaded_from_text_file() -> None:
     assert "fiber_g" in prompt
     assert "1 fillet (~120 g)" in prompt
     assert "1 glass (~150 ml)" in prompt
+    assert "count visible units first" in prompt
+    assert "follow_up_question" in prompt
     assert "text meal description" in prompt
 
 
@@ -190,3 +195,4 @@ def test_help_message_mentions_text_only_meals() -> None:
 
     assert "describe the meal in text" in text
     assert "new photo or a new text meal" in text
+    assert "quick clarification question" in text

@@ -35,10 +35,17 @@ class MealItem:
     name: str
     amount: str
     calories: int
+    count_estimate: float | None = None
+    unit_label: str | None = None
+    estimated_weight_g: float | None = None
+    estimated_volume_ml: float | None = None
     protein_g: float = 0.0
     fat_g: float = 0.0
     carbs_g: float = 0.0
     fiber_g: float = 0.0
+    estimation_basis: str | None = None
+    item_confidence: str = "medium"
+    reasoning_note_short: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -72,6 +79,7 @@ class MealAnalysis:
     total_fiber_g: float = 0.0
     notes: list[str] = field(default_factory=list)
     confidence: str = "medium"
+    follow_up_question: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -83,7 +91,15 @@ class MealAnalysis:
             "total_fiber_g": self.total_fiber_g,
             "notes": list(self.notes),
             "confidence": self.confidence,
+            "follow_up_question": self.follow_up_question,
         }
+
+    @staticmethod
+    def _optional_str(value: object) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
 
     @classmethod
     def from_dict(cls, payload: dict[str, object]) -> "MealAnalysis":
@@ -93,10 +109,29 @@ class MealAnalysis:
                 name=str(item.get("name", "")),
                 amount=str(item.get("amount", "")),
                 calories=int(item.get("calories", 0)),
+                count_estimate=(
+                    round(float(item.get("count_estimate", 0) or 0), 1)
+                    if item.get("count_estimate") is not None
+                    else None
+                ),
+                unit_label=cls._optional_str(item.get("unit_label")),
+                estimated_weight_g=(
+                    round(float(item.get("estimated_weight_g", 0) or 0), 1)
+                    if item.get("estimated_weight_g") is not None
+                    else None
+                ),
+                estimated_volume_ml=(
+                    round(float(item.get("estimated_volume_ml", 0) or 0), 1)
+                    if item.get("estimated_volume_ml") is not None
+                    else None
+                ),
                 protein_g=round(float(item.get("protein_g", 0) or 0), 1),
                 fat_g=round(float(item.get("fat_g", 0) or 0), 1),
                 carbs_g=round(float(item.get("carbs_g", 0) or 0), 1),
                 fiber_g=round(float(item.get("fiber_g", 0) or 0), 1),
+                estimation_basis=cls._optional_str(item.get("estimation_basis")),
+                item_confidence=str(item.get("item_confidence", "medium") or "medium"),
+                reasoning_note_short=cls._optional_str(item.get("reasoning_note_short")),
             )
             for item in raw_items
             if isinstance(item, dict)
@@ -110,6 +145,7 @@ class MealAnalysis:
             total_fiber_g=round(float(payload.get("total_fiber_g", 0) or 0), 1),
             notes=[str(item) for item in payload.get("notes", []) if str(item).strip()],
             confidence=str(payload.get("confidence", "medium") or "medium"),
+            follow_up_question=str(payload.get("follow_up_question", "") or "").strip(),
         )
 
     @property

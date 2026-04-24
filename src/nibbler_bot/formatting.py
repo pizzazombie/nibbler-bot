@@ -148,6 +148,7 @@ def format_help_message() -> str:
         "Important:\n"
         "• if you send a new photo or a new text meal, the old pending estimate is replaced\n"
         "• if you send several photos as an album, I will ask for one at a time\n"
+        "• if I ask one quick clarification question, just reply with a short answer and I will refine the estimate\n"
         "• only saved meals affect your daily total\n\n"
         "Use <b>⚙️ Settings</b> to change your name, daily calorie goal, nutrient limits, or delete a meal "
         "that was saved by mistake.\n"
@@ -285,6 +286,14 @@ def format_analysis_message(
         lines.extend(["", "<b>Notes:</b>"])
         for note in analysis.notes[:3]:
             lines.append(f"• {html.escape(note)}")
+    if analysis.follow_up_question and not is_saved:
+        lines.extend(
+            [
+                "",
+                f"❓ <b>Quick check:</b> {html.escape(analysis.follow_up_question)}",
+                "Reply with a short answer and I'll refine this estimate.",
+            ]
+        )
     if not is_saved:
         lines.extend(
             [

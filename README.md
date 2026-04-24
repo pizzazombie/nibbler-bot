@@ -19,6 +19,9 @@ Only confirmed meals count.
 - accepts text-only meal descriptions
 - accepts a caption with extra context
 - asks OpenAI to include approximate grams for solid food and milliliters for drinks
+- uses a two-pass meal analysis flow to detect components first and estimate nutrition second
+- can escalate difficult meals with many small items or mixed plates to a stronger model
+- can ask one short clarification question when the estimate is still weak
 - lets the user correct the estimate in plain English
 - stores daily calories, protein, fat, carbs, and fiber per user
 - asks for name, daily calorie goal, and nutrition goal during onboarding
@@ -59,6 +62,8 @@ You can switch models later with GitHub variables:
 
 - `OPENAI_MODEL`
 - `OPENAI_REASONING_EFFORT`
+- `OPENAI_COMPLEX_MEAL_MODEL`
+- `OPENAI_COMPLEX_MEAL_REASONING_EFFORT`
 - `OPENAI_PRICE_INPUT_PER_1M_USD`
 - `OPENAI_PRICE_CACHED_INPUT_PER_1M_USD`
 - `OPENAI_PRICE_OUTPUT_PER_1M_USD`
@@ -124,6 +129,8 @@ health
 - `DOCKER_NETWORK_MODE`
 - `OPENAI_MODEL`
 - `OPENAI_REASONING_EFFORT`
+- `OPENAI_COMPLEX_MEAL_MODEL`
+- `OPENAI_COMPLEX_MEAL_REASONING_EFFORT`
 - `OPENAI_MAX_OUTPUT_TOKENS`
 - `OPENAI_REQUEST_TIMEOUT_SECONDS`
 - `OPENAI_PRICE_INPUT_PER_1M_USD`

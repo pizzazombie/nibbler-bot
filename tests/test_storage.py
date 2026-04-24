@@ -24,10 +24,14 @@ def test_storage_flow(tmp_path) -> None:
                     name="Coke Zero",
                     amount="330 ml can",
                     calories=3,
+                    estimated_volume_ml=330,
                     protein_g=0,
                     fat_g=0,
                     carbs_g=0.2,
                     fiber_g=0,
+                    estimation_basis="package_label",
+                    item_confidence="high",
+                    reasoning_note_short="recognized zero-sugar can",
                 )
             ],
             total_calories=3,
@@ -37,6 +41,7 @@ def test_storage_flow(tmp_path) -> None:
             total_fiber_g=0,
             notes=["Recognized as a zero-sugar soda"],
             confidence="high",
+            follow_up_question="",
         )
         await storage.save_pending_analysis(
             chat_id=1,
@@ -49,6 +54,9 @@ def test_storage_flow(tmp_path) -> None:
         pending = await storage.get_pending_analysis(1)
         assert pending is not None
         assert pending.analysis.total_calories == 3
+        assert pending.analysis.items[0].estimated_volume_ml == 330
+        assert pending.analysis.items[0].estimation_basis == "package_label"
+        assert pending.analysis.items[0].reasoning_note_short == "recognized zero-sugar can"
 
         meal = await storage.confirm_pending_analysis(chat_id=1, local_date="2026-04-01")
         assert meal is not None
