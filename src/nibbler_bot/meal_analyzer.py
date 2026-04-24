@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from dataclasses import dataclass
 from importlib import resources
 
@@ -9,6 +10,9 @@ from openai import AsyncOpenAI, NOT_GIVEN
 
 from .config import Settings
 from .models import MealAnalysis, MealItem, OpenAIUsage
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def load_system_prompt() -> str:
@@ -227,7 +231,6 @@ class MealAnalyzer:
     ) -> AnalysisResult:
         request_records: list[AnalysisRequestRecord] = []
         scan_response = await self._run_structured_request(
-            request_kind="meal_scan",
             model=self._settings.openai_model,
             reasoning_effort=self._settings.openai_reasoning_effort,
             instructions=load_scan_prompt(),
@@ -239,6 +242,7 @@ class MealAnalyzer:
             schema=SCAN_SCHEMA,
             image_bytes=image_bytes,
             mime_type=mime_type,
+            max_output_tokens=max(self._settings.openai_max_output_tokens, 700),
         )
         scan_usage = self._extract_usage(scan_response)
         request_records.append(
@@ -251,7 +255,6 @@ class MealAnalyzer:
         scan_result = self._parse_scan_result(json.loads(scan_response.output_text))
 
         analysis_response = await self._run_structured_request(
-            request_kind="meal_analysis",
             model=self._settings.openai_model,
             reasoning_effort=self._settings.openai_reasoning_effort,
             instructions=load_system_prompt(),
@@ -264,6 +267,7 @@ class MealAnalyzer:
             schema=RESPONSE_SCHEMA,
             image_bytes=image_bytes,
             mime_type=mime_type,
+            max_output_tokens=max(self._settings.openai_max_output_tokens, 1800),
         )
         analysis_usage = self._extract_usage(analysis_response)
         request_records.append(
@@ -273,7 +277,24 @@ class MealAnalyzer:
                 usage=analysis_usage,
             )
         )
-        payload = json.loads(analysis_response.output_text)
+        payload = await self._parse_or_retry_response_json(
+            response=analysis_response,
+            request_kind="meal_analysis_retry",
+            model=self._settings.openai_model,
+            reasoning_effort=self._settings.openai_reasoning_effort,
+            instructions=load_system_prompt(),
+            prompt=self._build_final_user_prompt(
+                caption_text=caption_text,
+                correction_text=correction_text,
+                scan_result=scan_result,
+            ),
+            schema_name="meal_analysis",
+            schema=RESPONSE_SCHEMA,
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            retry_max_output_tokens=max(self._settings.openai_max_output_tokens, 2600),
+            request_records=request_records,
+        )
         analysis = self._parse_analysis_payload(payload)
 
         if self._should_escalate(scan_result, analysis):
@@ -283,7 +304,6 @@ class MealAnalyzer:
                 escalation_effort != self._settings.openai_reasoning_effort
             ):
                 escalated_response = await self._run_structured_request(
-                    request_kind="meal_analysis_escalated",
                     model=escalation_model,
                     reasoning_effort=escalation_effort,
                     instructions=load_system_prompt(),
@@ -296,6 +316,7 @@ class MealAnalyzer:
                     schema=RESPONSE_SCHEMA,
                     image_bytes=image_bytes,
                     mime_type=mime_type,
+                    max_output_tokens=max(self._settings.openai_max_output_tokens, 2200),
                 )
                 escalation_usage = self._extract_usage(escalated_response)
                 request_records.append(
@@ -305,7 +326,24 @@ class MealAnalyzer:
                         usage=escalation_usage,
                     )
                 )
-                payload = json.loads(escalated_response.output_text)
+                payload = await self._parse_or_retry_response_json(
+                    response=escalated_response,
+                    request_kind="meal_analysis_escalated_retry",
+                    model=escalation_model,
+                    reasoning_effort=escalation_effort,
+                    instructions=load_system_prompt(),
+                    prompt=self._build_final_user_prompt(
+                        caption_text=caption_text,
+                        correction_text=correction_text,
+                        scan_result=scan_result,
+                    ),
+                    schema_name="meal_analysis",
+                    schema=RESPONSE_SCHEMA,
+                    image_bytes=image_bytes,
+                    mime_type=mime_type,
+                    retry_max_output_tokens=max(self._settings.openai_max_output_tokens, 3200),
+                    request_records=request_records,
+                )
                 analysis = self._parse_analysis_payload(payload)
 
         total_usage = OpenAIUsage(
@@ -327,7 +365,6 @@ class MealAnalyzer:
     async def _run_structured_request(
         self,
         *,
-        request_kind: str,
         model: str,
         reasoning_effort: str | None,
         instructions: str,
@@ -336,6 +373,7 @@ class MealAnalyzer:
         schema: dict[str, object],
         image_bytes: bytes | None,
         mime_type: str | None,
+        max_output_tokens: int,
     ):
         content: list[dict[str, object]] = [{"type": "input_text", "text": prompt}]
         if image_bytes is not None and mime_type is not None:
@@ -351,7 +389,7 @@ class MealAnalyzer:
             model=model,
             instructions=instructions,
             reasoning={"effort": reasoning_effort} if reasoning_effort else NOT_GIVEN,
-            max_output_tokens=self._settings.openai_max_output_tokens,
+            max_output_tokens=max_output_tokens,
             input=[
                 {
                     "role": "user",
@@ -367,6 +405,53 @@ class MealAnalyzer:
                 }
             },
         )
+
+    async def _parse_or_retry_response_json(
+        self,
+        *,
+        response: object,
+        request_kind: str,
+        model: str,
+        reasoning_effort: str | None,
+        instructions: str,
+        prompt: str,
+        schema_name: str,
+        schema: dict[str, object],
+        image_bytes: bytes | None,
+        mime_type: str | None,
+        retry_max_output_tokens: int,
+        request_records: list[AnalysisRequestRecord],
+    ) -> dict[str, object]:
+        output_text = str(getattr(response, "output_text", "") or "").strip()
+        if output_text:
+            try:
+                return json.loads(output_text)
+            except json.JSONDecodeError:
+                LOGGER.warning("Structured output JSON was incomplete for %s; retrying.", request_kind)
+        else:
+            LOGGER.warning("Structured output text was empty for %s; retrying.", request_kind)
+
+        retry_response = await self._run_structured_request(
+            model=model,
+            reasoning_effort=reasoning_effort,
+            instructions=instructions,
+            prompt=prompt,
+            schema_name=schema_name,
+            schema=schema,
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            max_output_tokens=retry_max_output_tokens,
+        )
+        retry_usage = self._extract_usage(retry_response)
+        request_records.append(
+            AnalysisRequestRecord(
+                request_kind=request_kind,
+                model=model,
+                usage=retry_usage,
+            )
+        )
+        retry_output_text = str(getattr(retry_response, "output_text", "") or "").strip()
+        return json.loads(retry_output_text)
 
     def _build_scan_user_prompt(self, *, caption_text: str, correction_text: str) -> str:
         normalized_caption = caption_text.strip() or "No caption provided."
